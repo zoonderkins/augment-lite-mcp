@@ -1,0 +1,66 @@
+# ============================================================
+# augment-lite-mcp Docker Compose 配置
+# Version: 0.5.0
+# ============================================================
+
+version: '3.8'
+
+services:
+  augment-lite-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: augment-lite-mcp:0.5.0
+    container_name: augment-lite-mcp
+    
+    # MCP stdio 需要互動模式
+    stdin_open: true
+    tty: false
+    
+    # Volume 掛載
+    volumes:
+      # 資料目錄（必需）
+      - ./data:/app/data
+      
+      # 配置目錄（必需）
+      - ./config:/app/config
+      
+      # 可選：掛載本地專案
+      # - /path/to/your/project:/projects/myproject:ro
+    
+    # 環境變數
+    environment:
+      - AUGMENT_DB_DIR=/app/data
+      - PYTHONUNBUFFERED=1
+      
+      # API Keys（從 .env 讀取）
+      - REQUESTY_API_KEY=${REQUESTY_API_KEY}
+      - KIMI_LOCAL_KEY=${KIMI_LOCAL_KEY:-dummy}
+      - GLM_LOCAL_KEY=${GLM_LOCAL_KEY:-dummy}
+      - MINIMAXI_LOCAL_KEY=${MINIMAXI_LOCAL_KEY:-dummy}
+    
+    # 可選：使用本地 Proxy（macOS/Windows）
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    
+    # 可選：使用本地 Proxy（Linux）
+    # network_mode: "host"
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "test", "-d", "/app/data"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    
+    # 資源限制（可選）
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 1G
+

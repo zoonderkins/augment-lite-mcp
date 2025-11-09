@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "augment-lite": {
+      "command": "python",
+      "args": ["__ABS__/server.py"],
+      "env": {
+        "AUGMENT_DB_DIR": "__ABS__/data",
+        "KIMI_LOCAL_KEY": "dummy",
+        "GLM_LOCAL_KEY": "dummy",
+        "MINIMAXI_LOCAL_KEY": "dummy",
+        "REQUESTY_API_KEY": "sk-..."
+      }
+    }
+  }
+}

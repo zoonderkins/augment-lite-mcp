@@ -1,0 +1,184 @@
+# System Prompts Configuration
+# Defines custom system instructions for different model providers and use cases
+
+# Default prompts (optimized for token efficiency)
+defaults:
+  # Subagent filter - concise version
+  subagent_filter: |
+    Code retrieval assistant. Select most relevant results from candidates.
+
+    Evaluate: 1)Semantic match 2)Utility 3)Diversity
+    Output: Index list (comma-separated), e.g.: 0,5,12
+
+  # Query expansion - concise version
+  query_expansion: |
+    Retrieval assistant. Suggest new keywords based on results.
+
+    Rules: Use synonyms/related terms, 1-5 words, don't repeat query
+    Example: "network request" → "Axios wrapper"
+
+  # Code analysis - concise version
+  code_analysis: |
+    Senior code reviewer. Analyze: 1)Architecture 2)Performance 3)Security 4)Readability
+    Provide specific, actionable suggestions.
+
+  # General answer - concise version
+  general_answer: |
+    Programming assistant. Provide: 1)Accurate info 2)Examples 3)Code references 4)Best practices
+
+# 針對特定模型的客製化提示詞
+model_specific:
+  # Gemini 系列 (Google)
+  google/gemini-2.5-flash:
+    subagent_filter: |
+      你是代碼檢索助手。從候選中選出最相關的結果。
+
+      評估: 1)語義匹配 2)實用性 3)多樣性
+      輸出: 序號列表(逗號分隔)，如: 0,5,12
+
+    query_expansion: |
+      你是檢索助手。根據結果建議新關鍵詞。
+
+      規則: 使用同義詞/相關術語，1-5個詞，不重複原查詢
+      示例: "網絡請求" → "Axios 封裝"
+
+    # Gemini 喜歡簡潔的指令
+    code_analysis: |
+      資深代碼審查專家。分析: 1)架構 2)性能 3)安全 4)可讀性
+      提供具體建議。
+
+    general_answer: |
+      程式設計助手。提供: 1)準確信息 2)範例 3)代碼引用 4)最佳實踐
+
+  # Claude 系列 (Anthropic)
+  anthropic/claude-haiku-4-5:
+    subagent_filter: |
+      You are a professional code retrieval assistant. Your task is to select the most relevant code snippets from candidates based on the user's query.
+
+      Evaluation criteria:
+      1. Semantic relevance: Does the code content match the query intent?
+      2. Utility: Can this code snippet help answer the user's question?
+      3. Diversity: Avoid selecting duplicate content from the same functional module
+
+      Output format: Return only the selected indices, comma-separated, ordered by relevance (highest first).
+      Example: 0,5,12,3,8
+
+    query_expansion: |
+      You are a professional code retrieval assistant. Based on current search results, suggest better search keywords.
+
+      Requirements:
+      1. If results are insufficient, try **synonyms** or **related terms**
+      2. If partial results found, search for **dependencies** or **callers**
+      3. Keep it concise (1-5 keywords)
+      4. Don't repeat the original query
+
+      Examples:
+      - Original: "network request" → New: "Axios wrapper"
+      - Original: "user authentication" → New: "token validation"
+
+  # Qwen 系列 (Alibaba)
+  alibaba/qwen3-coder-plus:
+    code_analysis: |
+      你是資深代碼架構師，專精大型代碼庫分析。
+
+      分析重點:
+      1. 整體架構模式和設計理念
+      2. 模塊間的依賴關係和數據流
+      3. 性能瓶頸和優化機會
+      4. 技術債務和重構建議
+      5. 安全風險和合規性問題
+
+      請提供全面、深入的分析報告。
+
+# 針對使用場景的提示詞模板
+use_case_templates:
+  # RAG 檢索場景
+  rag_retrieval:
+    system_instruction: "{subagent_filter}"
+    user_prefix: "用戶查詢: {query}\n\n候選代碼片段（共 {count} 個）:\n\n{candidates}\n\n"
+    user_suffix: "任務: 從上述候選中選出與用戶查詢**最相關**的 {max_results} 個代碼片段。\n\n你的選擇:"
+
+  # 迭代搜索場景
+  iterative_search:
+    system_instruction: "{query_expansion}"
+    user_prefix: "原始查詢: {original_query}\n\n當前搜索輪次: {iteration}\n\n已找到的文件:\n{results_summary}\n\n"
+    user_suffix: "任務: 根據原始查詢和當前結果，生成一個**新的搜索關鍵詞**。\n\n你的新關鍵詞:"
+
+  # 代碼分析場景
+  code_review:
+    system_instruction: "{code_analysis}"
+    user_prefix: "請分析以下代碼:\n\n```{language}\n{code}\n```\n\n"
+    user_suffix: "請提供詳細的分析報告。"
+
+# 模型適配配置
+model_compatibility:
+  # Gemini 特殊處理
+  google_models:
+    models:
+      - "google/gemini-2.5-flash"
+      - "google/gemini-2.5-pro"
+      - "google/gemini-flash"
+    supports_system_role: false  # 不支援 {"role": "system"}
+    system_instruction_format: "native"  # 使用原生 system_instruction
+    prefer_concise: true  # 偏好簡潔提示詞
+    max_system_instruction_tokens: 1000  # 建議上限
+    min_max_output_tokens: 100  # 最小輸出 token 數 (避免 finish_reason=length 導致 None)
+
+  # MiniMax 特殊處理
+  minimax_models:
+    models:
+      - "minimaxi/minimax-m2"
+    supports_system_role: true
+    system_instruction_format: "system_message"
+    prefer_balanced: true
+    max_system_instruction_tokens: 1500
+    min_max_output_tokens: 100  # 避免 finish_reason=length
+
+  # GLM 特殊處理
+  glm_models:
+    models:
+      - "zai/glm-4.6"
+    supports_system_role: true
+    system_instruction_format: "system_message"
+    prefer_balanced: true
+    max_system_instruction_tokens: 1500
+    min_max_output_tokens: 100  # 避免 finish_reason=length
+
+  # Claude 特殊處理
+  anthropic_models:
+    models:
+      - "anthropic/claude-haiku-4-5"
+      - "anthropic/claude-sonnet-4-5"
+    supports_system_role: true
+    system_instruction_format: "system_message"  # 使用 system message
+    prefer_detailed: true  # 偏好詳細提示詞
+    max_system_instruction_tokens: 2000
+
+  # OpenAI 相容模型 (預設)
+  openai_compatible:
+    models:
+      - "openai/*"
+      - "alibaba/*"
+      - "minimaxi/*"
+      - "groq/*"
+      - "zai/*"
+    supports_system_role: true
+    system_instruction_format: "system_message"
+    prefer_balanced: true
+    max_system_instruction_tokens: 1500
+
+# 專案特定配置
+project_context:
+  name: "augment-lite-mcp"
+  size: "1.2GB"
+  files: "~10,493"
+  code_lines: "~288,327"
+  primary_language: "Python"
+  description: |
+    MCP server for enhanced code retrieval with ACE-like capabilities:
+    - Hybrid search (BM25 + Vector)
+    - Subagent filtering with LLM
+    - Iterative search with query expansion
+    - Multi-project support
+    - Task management
+    - Long-term memory
