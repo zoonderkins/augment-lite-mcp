@@ -21,8 +21,8 @@ augment-lite-mcp 是一個**零維護、本地優先**的 AI 代碼助手引擎�
 
 - **🔥 Zero Maintenance**: 自動增量索引，無需手動重建
 - **🔒 Privacy First**: 代碼完全本地存儲（DuckDB + SQLite）
-- **💰 Cost Effective**: 每次查詢 ~$0.00005（比純 LLM 便宜 1000 倍）
-- **🎯 High Accuracy**: 85% 準確度（混合本地向量 + 遠端 LLM 過濾）
+- **💰 Cost Effective**: 本地 BM25+Vector 優先，LLM 僅用於精篩
+- **🎯 Hybrid Search**: BM25 關鍵字 + 向量語義雙重匹配
 
 ---
 
@@ -58,10 +58,10 @@ Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
   → 使用原廠 Anthropic 格式 API
 ```
 
-**結果**:
-- 成本: ~$0.00005/query（99.9% 本地處理）
-- 延遲: ~1.05s
-- 準確度: 85%
+**優勢**:
+- 本地優先：BM25+Vector 在本地完成，無 API 成本
+- LLM 精篩：僅對候選結果調用 LLM，減少 token 消耗
+- 可選降級：Vector 未安裝時自動 fallback 到純 BM25
 
 **模型選擇**: 支持多種嵌入模型，詳見 [Vector Models 比較](docs/core/COMPARISON.md#vector-embedding-models-比較)
 
@@ -124,13 +124,13 @@ Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
 ```
 
 ### 4. 💾 Advanced Caching
-**三層快取加速**
+**多層快取架構**
 
-- **精確快取** (SQLite): 完全匹配的查詢
-- **語義快取** (FAISS): 相似查詢（95% 閾值）
-- **Provider 快取** (Requesty/Proxy): API 級別
+- **精確快取** (SQLite): 完全匹配的查詢直接返回
+- **語義快取** (FAISS): 相似查詢 cosine similarity 匹配
+- **LLM 快取**: API 回應快取（減少重複調用）
 
-**結果**: 90% 查詢 < 100ms
+**優勢**: 重複查詢即時返回，無需重新計算
 
 ### 5. 🧠 Memory & Tasks
 **長期記憶 + 任務追蹤**
@@ -145,7 +145,7 @@ task.add("Implement feature X", priority=10)
 task.list(status="in_progress")
 ```
 
-### 6. 🌐 Web UI (v1.0.0)
+### 6. 🌐 Web UI (v0.7.0)
 **專業管理界面**
 
 ```bash
@@ -158,15 +158,19 @@ cd web_ui && ./start.sh  # http://localhost:8080
 - ✅ 現代化深色主題
 
 ### 7. 🤖 MCP Protocol Compliance
-**22 個 MCP Tools**
+**28 個 MCP Tools**
 
 | 類別 | Tools |
 |------|-------|
 | **RAG** | `rag.search`, `answer.generate` |
-| **Project** | `project.init`, `project.status`, `index.rebuild` |
+| **Project** | `project.init`, `project.status` |
+| **Index** | `index.status`, `index.rebuild` |
 | **Cache** | `cache.clear`, `cache.status` |
 | **Memory** | `memory.get`, `memory.set`, `memory.delete`, `memory.list`, `memory.clear` |
 | **Tasks** | `task.add`, `task.list`, `task.update`, `task.get`, `task.delete`, `task.resume`, `task.current`, `task.stats` |
+| **Code** | `code.symbols`, `code.find_symbol`, `code.references` |
+| **Search** | `search.pattern` |
+| **File** | `file.read`, `file.list`, `file.find` |
 
 ---
 
@@ -550,7 +554,7 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 └─────────────────┬────────────────────────────┘
                   │ MCP Protocol
 ┌─────────────────▼────────────────────────────┐
-│         mcp_bridge_lazy.py (22 Tools)        │
+│         mcp_bridge_lazy.py (28 Tools)        │
 └─────────────────┬────────────────────────────┘
                   │
      ┌────────────┼────────────┐
@@ -608,7 +612,7 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 - [x] Long-term memory (global/project scope)
 - [x] Task management (structured tracking)
 - [x] Web UI (FastAPI + WebSocket)
-- [x] MCP protocol compliance (22 tools)
+- [x] MCP protocol compliance (28 tools)
 - [x] AI auto-discovery (server instructions)
 - [x] Gitignore filtering
 - [x] Model-specific system prompts
@@ -622,7 +626,7 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
   - Context Grounding Validation
   - Output Schema Validation
 
-### 🚧 計劃中 (v1.3.0+)
+### 🚧 計劃中 (v1.4.0+)
 
 #### 代碼理解增強 (優先級: 高)
 
@@ -652,16 +656,15 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 
 ---
 
-## 📊 效能指標
+## 📊 效能特點
 
-| 指標 | 數值 | 說明 |
-|------|------|------|
-| **Indexing Speed** | 1000+ files/sec | DuckDB BM25 索引 |
-| **Incremental Update** | 0.5s (1 file) | 比全量重建快 60x |
-| **Search Latency** | ~1.05s | 含 LLM 過濾 |
-| **Cost per Query** | ~$0.00005 | 99.9% 本地處理 |
-| **Accuracy** | 85% | 混合搜索 + LLM 過濾 |
-| **Cache Hit Rate** | +20% | 語義快取提升 |
+| 特點 | 說明 |
+|------|------|
+| **Indexing** | DuckDB BM25 批量索引，支援大型代碼庫 |
+| **Incremental** | 只更新變更文件，避免全量重建 |
+| **Local First** | BM25+Vector 本地計算，無 API 延遲 |
+| **LLM 精篩** | 僅候選結果送 LLM，減少 token 消耗 |
+| **Cache** | 重複查詢直接返回，無計算開銷 |
 
 ---
 

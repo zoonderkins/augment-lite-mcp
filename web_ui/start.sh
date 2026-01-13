@@ -10,4 +10,10 @@ echo "🔍 API Docs: http://localhost:$PORT/docs"
 echo ""
 
 cd "$(dirname "$0")"
-uvicorn main:app --host 0.0.0.0 --port "$PORT" --reload
+
+# Use venv Python if available
+if [ -f "../.venv/bin/uvicorn" ]; then
+    ../.venv/bin/uvicorn main:app --host 0.0.0.0 --port "$PORT" --reload
+else
+    uvicorn main:app --host 0.0.0.0 --port "$PORT" --reload
+fi
