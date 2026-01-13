@@ -1,6 +1,6 @@
 # ============================================================
 # augment-lite-mcp Docker Compose 配置
-# Version: 1.1.0
+# Version: 1.2.0
 # ============================================================
 
 version: '3.8'
@@ -10,7 +10,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: augment-lite-mcp:1.1.0
+    image: augment-lite-mcp:1.2.0
     container_name: augment-lite-mcp
     
     # MCP stdio 需要互動模式

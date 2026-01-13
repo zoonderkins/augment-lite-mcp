@@ -1,0 +1,30 @@
+# Security Vulnerability Patterns
+# Format: pattern|description|severity
+
+[SQL_INJECTION]
+cursor\.execute\s*\([^,]+\+|String concatenation in SQL|HIGH
+SELECT.*FROM.*WHERE.*\+|Concatenated WHERE clause|HIGH
+
+[COMMAND_INJECTION]
+os\.system\s*\(|os.system usage|HIGH
+os\.popen\s*\(|os.popen usage|HIGH
+subprocess\..*shell\s*=\s*True|shell=True|HIGH
+
+[DYNAMIC_CODE]
+\beval\s*\([^)]+\)|dynamic evaluation|CRITICAL
+\bexec\s*\([^)]+\)|dynamic execution|CRITICAL
+
+[XSS]
+innerHTML\s*=|innerHTML assignment|HIGH
+v-html\s*=|Vue v-html|MEDIUM
+
+[PATH_TRAVERSAL]
+\.\./|\.\.\|directory traversal|HIGH
+
+[SENSITIVE_DATA]
+password\s*=\s*['\"][^'\"]+['\"]|hardcoded password|CRITICAL
+(sk-|pk_live_)[A-Za-z0-9]{20,}|API key exposed|CRITICAL
+
+[DESERIALIZATION]
+pickle\.loads?\s*\(|pickle usage|HIGH
+yaml\.unsafe_load|unsafe yaml|CRITICAL

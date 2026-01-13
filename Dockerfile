@@ -1,12 +1,12 @@
 # ============================================================
 # augment-lite-mcp Dockerfile
-# Version: 1.1.0
+# Version: 1.2.0
 # 支援 MCP stdio 通訊
 # ============================================================
 
 FROM python:3.12-slim
 
-LABEL version="1.1.0"
+LABEL version="1.2.0"
 LABEL description="augment-lite-mcp: Local-first AI coding assistant with MCP support"
 LABEL maintainer="your-email@example.com"
 

@@ -2,7 +2,7 @@
 
 > **Zero-Maintenance AI Code Assistant** - Local-first, cost-effective, privacy-safe
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/yourusername/augment-lite-mcp/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.1+-green.svg)](https://github.com/anthropics/mcp)
@@ -131,7 +131,7 @@ cd web_ui && ./start.sh  # http://localhost:8080
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/augment-lite-mcp.git
+git clone https://github.com/zoonderkins/augment-lite-mcp.git
 cd augment-lite-mcp
 
 # 2. 安裝依賴 (使用 uv)
@@ -293,6 +293,17 @@ claude mcp add --scope user --transport stdio augment-lite \
 | `project.init/status` | 專案管理 |
 | `cache.clear/status` | 快取管理 |
 
+### 🛡️ Guardrails (v1.2.0)
+
+| 模組 | 功能 | 說明 |
+|------|------|------|
+| `prompt_injection` | 提示注入檢測 | 防止指令覆蓋、角色劫持、越獄攻擊 |
+| `pii_detection` | PII/敏感數據檢測 | 郵箱、電話、SSN、API Key、JWT |
+| `code_security` | 代碼安全掃描 | SQL注入、XSS、命令注入、OWASP Top 10 |
+| `hallucination` | 幻覺檢測 | 驗證回答是否基於提供的證據 |
+| `context_grounding` | 上下文根基 | 確保回答不超出提供的上下文 |
+| `schema_validation` | 輸出驗證 | JSON schema 驗證、MCP 輸出格式 |
+
 ---
 
 ## 🔑 環境變數
@@ -395,8 +406,15 @@ claude mcp add --scope user --transport stdio augment-lite \
 - [x] Model-specific system prompts
 - [x] Dynamic token limits
 - [x] Guardrails (evidence citation)
+- [x] Modern Guardrails (v1.2.0)
+  - Prompt Injection Detection
+  - PII/API Key Detection
+  - Code Security Scanning (OWASP)
+  - Hallucination Detection
+  - Context Grounding Validation
+  - Output Schema Validation
 
-### 🚧 計劃中 (v1.1.0+)
+### 🚧 計劃中 (v1.3.0+)
 
 - [ ] Multi-language embeddings (multilingual-e5-large)
 - [ ] Code-specific embeddings (CodeBERT, UniXcoder)
@@ -528,8 +546,8 @@ python tests/test_high_priority_apis.py
 
 ## 🔗 相關連結
 
-- **Repository**: https://github.com/yourusername/augment-lite-mcp
-- **Issues**: https://github.com/yourusername/augment-lite-mcp/issues
+- **Repository**: https://github.com/zoonderkins/augment-lite-mcp
+- **Issues**: https://github.com/zoonderkins/augment-lite-mcp/issues
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 - **MCP Protocol**: https://github.com/anthropics/mcp
 
