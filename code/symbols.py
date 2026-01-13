@@ -1,43 +1,21 @@
-"""AST-based Python symbol extraction (Serena-like)."""
+"""Multi-language symbol extraction using Tree-sitter (with Python AST fallback)."""
 import ast
 from pathlib import Path
 from typing import Optional
 
+# Try to import tree-sitter parser
+try:
+    from .tree_sitter_parser import (
+        parse_file, detect_language, extract_symbols_from_tree,
+        supported_extensions, EXT_TO_LANG
+    )
+    TREE_SITTER_AVAILABLE = True
+except ImportError:
+    TREE_SITTER_AVAILABLE = False
+    EXT_TO_LANG = {".py": "python"}
 
-class SymbolInfo:
-    """Lightweight symbol info container."""
-    __slots__ = ('name', 'kind', 'lineno', 'end_lineno', 'name_path', 'children', 'body')
-
-    def __init__(self, name: str, kind: str, lineno: int, end_lineno: int,
-                 name_path: str = "", body: str = ""):
-        self.name = name
-        self.kind = kind  # 'class', 'function', 'method', 'variable'
-        self.lineno = lineno
-        self.end_lineno = end_lineno
-        self.name_path = name_path or name
-        self.children: list['SymbolInfo'] = []
-        self.body = body
-
-    def to_dict(self, include_body: bool = False) -> dict:
-        d = {
-            "name": self.name,
-            "kind": self.kind,
-            "lineno": self.lineno,
-            "end_lineno": self.end_lineno,
-            "name_path": self.name_path,
-        }
-        if self.children:
-            d["children"] = [c.to_dict(include_body) for c in self.children]
-        if include_body and self.body:
-            d["body"] = self.body
-        return d
-
-
-def _get_source_segment(source_lines: list[str], start: int, end: int) -> str:
-    """Extract source segment by line range."""
-    if not source_lines or start < 1:
-        return ""
-    return "\n".join(source_lines[start - 1:end])
+    def supported_extensions():
+        return [".py"]
 
 
 def extract_symbols(
@@ -45,20 +23,45 @@ def extract_symbols(
     depth: int = 2,
     include_body: bool = False
 ) -> list[dict]:
-    """Extract symbols from a Python file using AST.
+    """Extract symbols from a source file.
+
+    Uses Tree-sitter for multi-language support, falls back to Python AST.
 
     Args:
-        file_path: Path to Python file
-        depth: 1=top-level only, 2=include class methods
+        file_path: Path to source file
+        depth: 1=top-level only, 2=include nested (class methods, etc.)
         include_body: Include source code body
 
     Returns:
-        List of symbol dicts with name, kind, lineno, etc.
+        List of symbol dicts with name, kind, lineno, language, etc.
     """
     path = Path(file_path)
-    if not path.exists() or path.suffix != ".py":
+    if not path.exists():
         return []
 
+    ext = path.suffix.lower()
+
+    # Try Tree-sitter first (multi-language)
+    if TREE_SITTER_AVAILABLE and ext in EXT_TO_LANG:
+        try:
+            source = path.read_bytes()
+            tree = parse_file(file_path)
+            if tree:
+                lang = detect_language(file_path)
+                return extract_symbols_from_tree(tree, source, lang, depth, include_body)
+        except Exception:
+            pass  # Fall through to Python AST
+
+    # Fallback: Python AST for .py files
+    if ext == ".py":
+        return _extract_python_ast(file_path, depth, include_body)
+
+    return []
+
+
+def _extract_python_ast(file_path: str, depth: int, include_body: bool) -> list[dict]:
+    """Extract symbols from Python file using built-in AST (fallback)."""
+    path = Path(file_path)
     try:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(path))
@@ -66,41 +69,75 @@ def extract_symbols(
         return []
 
     source_lines = source.splitlines() if include_body else []
-    symbols: list[SymbolInfo] = []
+    symbols = []
+
+    def get_body(start: int, end: int) -> str:
+        if not include_body or not source_lines:
+            return ""
+        return "\n".join(source_lines[start - 1:end])
 
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             end_line = node.end_lineno or node.lineno
-            body = _get_source_segment(source_lines, node.lineno, end_line) if include_body else ""
-            sym = SymbolInfo(node.name, "class", node.lineno, end_line, node.name, body)
+            sym = {
+                "name": node.name,
+                "kind": "class",
+                "lineno": node.lineno,
+                "end_lineno": end_line,
+                "name_path": node.name,
+                "language": "python",
+            }
+            if include_body:
+                sym["body"] = get_body(node.lineno, end_line)
 
             if depth >= 2:
+                children = []
                 for child in ast.iter_child_nodes(node):
-                    if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         child_end = child.end_lineno or child.lineno
-                        child_body = _get_source_segment(source_lines, child.lineno, child_end) if include_body else ""
-                        child_sym = SymbolInfo(
-                            child.name, "method", child.lineno, child_end,
-                            f"{node.name}/{child.name}", child_body
-                        )
-                        sym.children.append(child_sym)
+                        child_sym = {
+                            "name": child.name,
+                            "kind": "method",
+                            "lineno": child.lineno,
+                            "end_lineno": child_end,
+                            "name_path": f"{node.name}/{child.name}",
+                            "language": "python",
+                        }
+                        if include_body:
+                            child_sym["body"] = get_body(child.lineno, child_end)
+                        children.append(child_sym)
+                if children:
+                    sym["children"] = children
 
             symbols.append(sym)
 
-        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             end_line = node.end_lineno or node.lineno
-            body = _get_source_segment(source_lines, node.lineno, end_line) if include_body else ""
-            sym = SymbolInfo(node.name, "function", node.lineno, end_line, node.name, body)
+            sym = {
+                "name": node.name,
+                "kind": "function",
+                "lineno": node.lineno,
+                "end_lineno": end_line,
+                "name_path": node.name,
+                "language": "python",
+            }
+            if include_body:
+                sym["body"] = get_body(node.lineno, end_line)
             symbols.append(sym)
 
         elif isinstance(node, ast.Assign):
-            # Module-level variable assignments
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    sym = SymbolInfo(target.id, "variable", node.lineno, node.end_lineno or node.lineno, target.id)
-                    symbols.append(sym)
+                    symbols.append({
+                        "name": target.id,
+                        "kind": "variable",
+                        "lineno": node.lineno,
+                        "end_lineno": node.end_lineno or node.lineno,
+                        "name_path": target.id,
+                        "language": "python",
+                    })
 
-    return [s.to_dict(include_body) for s in symbols]
+    return symbols
 
 
 def find_symbol(
@@ -110,7 +147,7 @@ def find_symbol(
     include_body: bool = True,
     max_results: int = 10
 ) -> list[dict]:
-    """Find symbol definitions by name pattern.
+    """Find symbol definitions by name pattern (multi-language).
 
     Args:
         pattern: Symbol name or prefix (e.g., 'MyClass', 'handle_')
@@ -125,12 +162,16 @@ def find_symbol(
     results = []
     pattern_lower = pattern.lower()
 
+    # Determine which extensions to search
+    extensions = supported_extensions() if TREE_SITTER_AVAILABLE else [".py"]
+
     if file_path:
-        # Search single file
         files = [Path(file_path)]
     elif project_root:
-        # Search all Python files in project
-        files = list(Path(project_root).rglob("*.py"))
+        files = []
+        root = Path(project_root)
+        for ext in extensions:
+            files.extend(root.rglob(f"*{ext}"))
     else:
         return []
 
@@ -138,7 +179,7 @@ def find_symbol(
         if not fp.exists() or fp.is_dir():
             continue
         # Skip common non-code directories
-        if any(part.startswith('.') or part in ('__pycache__', 'node_modules', 'venv', '.venv')
+        if any(part.startswith('.') or part in ('__pycache__', 'node_modules', 'venv', '.venv', 'dist', 'build')
                for part in fp.parts):
             continue
 
@@ -180,3 +221,11 @@ def get_symbol_at_line(file_path: str, line: int) -> Optional[dict]:
         return None
 
     return find_in_symbols(symbols)
+
+
+def get_supported_languages() -> list[str]:
+    """Return list of supported languages."""
+    if TREE_SITTER_AVAILABLE:
+        from .tree_sitter_parser import supported_languages
+        return supported_languages()
+    return ["python"]

@@ -399,17 +399,23 @@ rag.search  # 自動處理 init + index
 | `index.rebuild` | 重建專案索引 | 索引損壞時使用 |
 | `index.status` | 檢查索引狀態 | 查看索引健康度 |
 
-### 代碼分析功能 (Serena 類似)
+### 代碼分析功能 (Serena 類似) - Tree-sitter 多語言支援
 
 | Tool | 說明 | 範例 |
 |------|------|------|
 | `code.symbols` | 獲取代碼符號概覽 | 列出類、函數、方法 |
 | `code.find_symbol` | 查找符號定義 | 找到 `MyClass` 定義位置 |
-| `code.references` | 查找符號引用 | 找到所有使用 `my_func` 的地方 |
+| `code.references` | 查找符號引用 (AST) | 找到所有使用 `my_func` 的地方 |
 | `search.pattern` | 正則模式搜索 | `def.*search` 匹配 |
 | `file.read` | 讀取文件內容 | 支持行範圍 |
 | `file.list` | 列出目錄內容 | 支持 glob 過濾 |
 | `file.find` | 查找文件 | `**/*.py` 模式 |
+
+**支援語言** (v1.3.0+, Tree-sitter):
+```
+Python, JavaScript, TypeScript, Go, Rust, Bash,
+JSON, YAML, HTML, CSS, HCL (Terraform), TOML
+```
 
 ### 記憶與任務
 
@@ -628,20 +634,21 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 
 ### 🚧 計劃中 (v1.4.0+)
 
-#### 代碼理解增強 (優先級: 高)
+#### 代碼理解增強
 
-| 方案 | 功能 | Token 消耗 | 準確度 | 依賴複雜度 |
-|------|------|-----------|--------|-----------|
-| **Tree-sitter** | AST 結構解析 | 低（本地） | 高 | 中等 |
-| **LSP** | 完整語義分析 | 最低 | 最高 | 高 |
-| **Auggie MCP** | 外部語義引擎 | 低 | 高 | 需安裝 |
+| 方案 | 功能 | 狀態 |
+|------|------|------|
+| **Tree-sitter** | AST 結構解析 (12 語言) | ✅ v1.3.0 已實現 |
+| **LSP** | 完整語義分析 | 🚧 計劃中 |
+| **Auggie MCP** | 外部語義引擎 | 🚧 可選整合 |
 
-- [ ] **Tree-sitter 整合**: 提取代碼結構（函數、類、參數）
+- [x] **Tree-sitter 整合** (v1.3.0): 12 語言 AST 解析
+  - Python, JavaScript, TypeScript, Go, Rust, Bash
+  - JSON, YAML, HTML, CSS, HCL (Terraform), TOML
+- [ ] **LSP 支援**: 完整語義分析（rename, diagnostics, code actions）
 - [ ] **Auggie MCP 整合**: 可選語義引擎，節省 token
   - 安裝: `npm install -g @augmentcode/auggie@latest && auggie login`
   - 配置: `claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie","args":["--mcp"]}'`
-  - 文檔: https://docs.augmentcode.com/context-services/mcp/quickstart-claude-code
-- [ ] **LSP 支援**: 完整語義分析（go-to-definition, find-references）
 
 #### 其他計劃
 
