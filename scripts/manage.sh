@@ -98,38 +98,56 @@ print_info() {
 # ============================================================
 
 check_proxy_status() {
-    print_header "檢查本地 Proxy 狀態"
+    print_header "檢查 Provider 狀態"
     echo ""
-    
-    local ports=(8081 8082 8083)
-    local names=("Kimi K2-0905" "GLM-4.6" "Minimaxi M2")
-    local all_ok=true
-    
-    for i in "${!ports[@]}"; do
-        local port="${ports[$i]}"
-        local name="${names[$i]}"
-        
-        if nc -z 127.0.0.1 "$port" 2>/dev/null; then
-            print_success "Port $port ($name) - 運行中"
-        else
-            print_error "Port $port ($name) - 未運行"
-            all_ok=false
+
+    # 檢測是否使用本地代理
+    local uses_local_proxy=false
+    if [ -f "config/models.yaml" ]; then
+        if grep -A 50 "^routes:" config/models.yaml | grep -q '\-local"'; then
+            uses_local_proxy=true
         fi
-    done
-    
-    echo ""
-    
-    if [ "$all_ok" = true ]; then
-        print_success "所有本地 Proxy 都在運行中"
-    else
-        print_warning "部分本地 Proxy 未運行"
-        echo ""
-        print_info "如需啟動本地 Proxy，請參考文檔或使用以下命令："
-        echo "  # 啟動 Kimi Proxy (port 8081)"
-        echo "  # 啟動 GLM Proxy (port 8082)"
-        echo "  # 啟動 Minimaxi Proxy (port 8083)"
     fi
-    
+
+    if [ "$uses_local_proxy" = true ]; then
+        print_info "檢測到使用本地 Proxy 模式"
+        echo ""
+
+        local ports=(8081 8082 8083)
+        local names=("Kimi Proxy" "GLM Proxy" "MiniMax Proxy")
+        local all_ok=true
+
+        for i in "${!ports[@]}"; do
+            local port="${ports[$i]}"
+            local name="${names[$i]}"
+
+            if nc -z 127.0.0.1 "$port" 2>/dev/null; then
+                print_success "Port $port ($name) - 運行中"
+            else
+                print_error "Port $port ($name) - 未運行"
+                all_ok=false
+            fi
+        done
+
+        echo ""
+
+        if [ "$all_ok" = true ]; then
+            print_success "所有本地 Proxy 都在運行中"
+        else
+            print_warning "部分本地 Proxy 未運行"
+            echo ""
+            print_info "如需啟動本地 Proxy，請參考 claude-code-proxy 文檔"
+        fi
+    else
+        print_success "當前使用原廠 API 模式（推薦）"
+        echo ""
+        print_info "原廠 Providers:"
+        echo "  - glm-4.7: api.z.ai (需設置 GLM_API_KEY)"
+        echo "  - minimax-m2.1: api.minimax.io (需設置 MINIMAX_API_KEY)"
+        echo ""
+        print_info "如需切換到本地代理模式，修改 config/models.yaml"
+    fi
+
     echo ""
 }
 
@@ -626,7 +644,7 @@ install_web_ui_deps() {
 
 show_menu() {
     clear
-    print_header "augment-lite-mcp 管理工具 v0.7.0"
+    print_header "augment-lite-mcp 管理工具 v1.3.0"
     echo ""
     echo "專案管理："
     echo "  1) 列出所有專案"

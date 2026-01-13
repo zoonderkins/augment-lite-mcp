@@ -33,69 +33,147 @@ BASE = Path(__file__).resolve().parent
 
 # Server instructions - guide AI on when and how to use this MCP server
 SERVER_INSTRUCTIONS = """
-🔍 augment-lite: Enhanced Code Retrieval with RAG
+🔍 augment-lite: Zero-Maintenance AI Code Assistant
 
 CORE CAPABILITIES:
 1. Semantic code search (hybrid BM25 + vector embeddings)
 2. Question answering with source citations
-3. Multi-project support with automatic indexing
-4. Long-term memory for architectural decisions
+3. Multi-project support with AUTO-INIT & AUTO-INDEX
+4. Long-term memory for architectural decisions (Serena-style)
 5. Task management across sessions
 
-PROACTIVE USAGE PATTERNS:
+═══════════════════════════════════════════════════════════════
+ZERO-CONFIGURATION WORKFLOW (v1.2.0+)
+═══════════════════════════════════════════════════════════════
 
-📂 When user starts working in a new directory:
-   → Automatically suggest: project.init project="auto"
-   → This indexes the codebase for faster searches
+rag.search will automatically:
+1. AUTO-INIT: Register project if not exists
+2. AUTO-INDEX: Build index if not exists, or incremental update
+3. Execute search
 
-🔍 When user asks "where is..." or "how does...":
-   → Use rag.search first to find relevant code
-   → If results insufficient, retry with use_iterative=true
-   → Then use answer.generate for synthesized explanation
+NO MANUAL project.init NEEDED for basic usage!
 
-💾 When user mentions architectural decisions or important facts:
-   → Proactively suggest: memory.set key="decision_name" value="..."
-   → Store: architecture patterns, API conventions, deployment steps
-   → Retrieve later with: memory.get or memory.list
+═══════════════════════════════════════════════════════════════
+PROACTIVE MEMORY PATTERNS (Serena-style)
+═══════════════════════════════════════════════════════════════
 
-✅ When user outlines multi-step work:
-   → Create tasks automatically: task.add title="..." priority=1
-   → Track progress: task.update status="in_progress"
-   → Review with: task.current or task.list
+When starting work on a project, auto-create these memories:
 
-INTELLIGENT WORKFLOWS:
+📋 project_overview (REQUIRED on first interaction):
+   → memory.set key="project_overview" value="..."
+   → Content: project name, version, purpose, core modules, tech stack
 
-1. Code Exploration Workflow:
+📝 code_style (detect from codebase or user input):
+   → memory.set key="code_style" value="..."
+   → Content: line length, formatter, naming conventions, import style
+
+🔧 suggested_commands (from README/docs or discovery):
+   → memory.set key="suggested_commands" value="..."
+   → Content: setup, build, test, lint commands
+
+🏗️ architecture_decisions (when user explains design):
+   → memory.set key="architecture_decisions" value="..."
+   → Content: patterns, frameworks, API conventions
+
+═══════════════════════════════════════════════════════════════
+MEMORY STORAGE TRIGGERS (auto-detect & store)
+═══════════════════════════════════════════════════════════════
+
+ALWAYS store when user mentions:
+- Architecture: "The system uses..." → architecture_decisions
+- Conventions: "All endpoints should..." → api_conventions
+- Code style: "We use ruff..." → code_style
+- Deployment: "To deploy, run..." → deployment_notes
+- Bug patterns: "This error happens when..." → known_issues
+- Design decisions: "We chose X over Y because..." → architecture_decisions
+
+═══════════════════════════════════════════════════════════════
+TASK MANAGEMENT (auto-track progress)
+═══════════════════════════════════════════════════════════════
+
+✅ Auto-create tasks when:
+- User lists steps: "First..., then..., finally..."
+- User says "TODO" or "need to"
+- User outlines plan: "1. Do X, 2. Do Y, 3. Do Z"
+
+✅ Auto-update tasks:
+- Mark in_progress when starting work
+- Mark completed when done
+- Add blockers as new tasks
+
+═══════════════════════════════════════════════════════════════
+INTELLIGENT WORKFLOWS
+═══════════════════════════════════════════════════════════════
+
+1. First-Time Project Setup:
+   rag.search (auto-init + auto-index) → detect code_style → memory.set
+
+2. Code Exploration:
    rag.search → (if insufficient) → rag.search use_iterative=true
 
-2. Question Answering Workflow:
+3. Question Answering:
    rag.search → answer.generate (auto-cites sources)
-
-3. New Project Setup:
-   project.init → project.status (verify indexing)
 
 4. Knowledge Persistence:
    Detect important info → memory.set (store automatically)
 
 5. Task Tracking:
-   Detect multi-step work → task.add (create automatically)
+   Detect multi-step work → task.add → task.update → task.complete
 
-WHEN TO AUTO-INITIALIZE:
-- Detect new .git directory → suggest project.init
-- User mentions "this codebase" but no index exists → auto-init
-- Search fails with NO_RESULTS → suggest indexing if not done
+═══════════════════════════════════════════════════════════════
+AUGGIE MCP 協同模式 (如果已安裝 auggie-mcp)
+═══════════════════════════════════════════════════════════════
 
-MEMORY STORAGE TRIGGERS (auto-suggest):
-- User explains architecture: "The system uses microservices..."
-- API conventions: "All endpoints should return {status, data}..."
-- Deployment notes: "To deploy, run..."
-- Bug patterns: "This error happens when..."
-- Design decisions: "We chose X over Y because..."
+當 Claude Code 同時有 augment-lite 和 auggie-mcp 兩個 MCP 服務器時：
 
-TASK CREATION TRIGGERS (auto-suggest):
-- User lists steps: "First..., then..., finally..."
-- User says "TODO" or "need to"
-- User outlines plan: "1. Do X, 2. Do Y, 3. Do Z"
+模式 A: augment-lite 初篩 → auggie 精排
+┌─────────────────────────────────────────────────────────────┐
+│ 1. augment-lite rag.search k=20 use_subagent=false         │
+│    → 返回 20 個候選 (BM25+Vector 本地處理)                  │
+│                                                             │
+│ 2. auggie-mcp codebase-retrieval                           │
+│    → 用 Augment 語義引擎對候選排序                          │
+│                                                             │
+│ 3. 返回最終 Top-5 結果給用戶                                │
+└─────────────────────────────────────────────────────────────┘
+
+模式 B: auggie 語義搜索 → augment-lite 存儲
+┌─────────────────────────────────────────────────────────────┐
+│ 1. auggie-mcp codebase-retrieval query="..."               │
+│    → Augment 語義搜索                                       │
+│                                                             │
+│ 2. 發現重要架構信息?                                        │
+│    → augment-lite memory.set key="architecture_decisions"  │
+│                                                             │
+│ 3. 下次搜索時可以參考 memory                                │
+└─────────────────────────────────────────────────────────────┘
+
+模式 C: 純 augment-lite (無 auggie)
+┌─────────────────────────────────────────────────────────────┐
+│ augment-lite rag.search use_subagent=true                  │
+│ → 內建 LLM 過濾 (GLM-4.7/MiniMax-M2.1)                     │
+│ → 完全獨立運作，不依賴 auggie                               │
+└─────────────────────────────────────────────────────────────┘
+
+協同判斷規則:
+- 檢測到 auggie-mcp 可用 → 優先使用模式 A (節省 token)
+- auggie-mcp 不可用或失敗 → 自動 fallback 到模式 C
+- 需要持久化信息 → 無論哪種模式都存入 augment-lite memory
+
+═══════════════════════════════════════════════════════════════
+STANDARD MEMORY KEYS (use these consistently)
+═══════════════════════════════════════════════════════════════
+
+| Key | Purpose |
+|-----|---------|
+| project_overview | Project summary, version, purpose |
+| code_style | Formatting, linting, naming conventions |
+| suggested_commands | Setup, build, test commands |
+| architecture_decisions | Design patterns, framework choices |
+| api_conventions | REST/GraphQL patterns, error formats |
+| deployment_notes | Deploy steps, environment configs |
+| known_issues | Common bugs, workarounds |
+| task_completion_checklist | Release/feature checklists |
 """
 
 server = Server("augment-lite", instructions=SERVER_INSTRUCTIONS)
@@ -744,11 +822,42 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
         # AUTO-INCREMENTAL INDEXING (acemcp-style)
         if auto_index:
             try:
+                import sys
                 from retrieval.incremental_indexer import auto_index_if_needed
-                from utils.project_utils import resolve_auto_project, get_project_status
+                from utils.project_utils import resolve_auto_project, get_project_status, load_projects, save_projects
 
                 # Resolve project
                 project_name = resolve_auto_project()
+
+                # AUTO-INIT: If no project registered for current directory, auto-init it
+                if not project_name and cwd:
+                    cwd_path = Path(cwd).resolve()
+                    # Use directory name as project name (sanitized)
+                    import re
+                    raw_name = cwd_path.name
+                    # Sanitize: only alphanumeric, underscore, hyphen
+                    project_name = re.sub(r'[^a-zA-Z0-9_-]', '-', raw_name)
+
+                    print(f"[AUTO-INIT] Project not registered, auto-initializing: {project_name}", file=sys.stderr)
+
+                    # Register project
+                    import hashlib
+                    projects = load_projects()
+                    project_id = hashlib.md5(str(cwd_path).encode()).hexdigest()[:8]
+                    projects[project_name] = {
+                        "id": project_id,
+                        "root": str(cwd_path),
+                        "db": f"data/corpus_{project_name}.duckdb",
+                        "chunks": f"data/chunks_{project_name}.jsonl",
+                        "active": True,
+                    }
+                    # Deactivate other projects
+                    for name in projects:
+                        if name != project_name:
+                            projects[name]["active"] = False
+                    save_projects(projects)
+                    print(f"[AUTO-INIT] Registered project: {project_name} -> {cwd_path}", file=sys.stderr)
+
                 if project_name:
                     status = get_project_status(project_name)
                     project_root = status.get("root")
@@ -763,7 +872,7 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
                     else:
                         print(f"[AUTO-INDEX] Project {project_name} not found, skipping auto-index", file=sys.stderr)
                 else:
-                    print(f"[AUTO-INDEX] No active project, skipping auto-index", file=sys.stderr)
+                    print(f"[AUTO-INDEX] No active project and no cwd, skipping auto-index", file=sys.stderr)
 
             except Exception as e:
                 # Don't fail search if auto-index fails
@@ -1369,7 +1478,7 @@ async def amain():
     async with stdio_server() as (read, write):
         init_options = InitializationOptions(
             server_name="augment-lite",
-            server_version="1.2.0",
+            server_version="1.3.0",
             capabilities=server.get_capabilities(
                 notification_options=NotificationOptions(),
                 experimental_capabilities={},

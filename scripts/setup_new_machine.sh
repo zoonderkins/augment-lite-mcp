@@ -346,16 +346,29 @@ run_migrations() {
 check_local_proxy() {
     print_header "檢查本地 Proxy"
     echo ""
-    
-    print_info "檢查本地 Proxy 服務狀態..."
-    echo ""
-    
-    bash scripts/manage.sh check-proxy
-    
-    echo ""
-    print_info "如果本地 Proxy 未運行，請先啟動它們"
-    echo "或修改 config/models.yaml 使用 Requesty 服務"
-    echo ""
+
+    # 檢測 routes 是否使用 *-local providers
+    local uses_local_proxy=false
+    if [ -f "config/models.yaml" ]; then
+        # 檢查 routes 區塊是否有 *-local 配置
+        if grep -A 50 "^routes:" config/models.yaml | grep -q '\-local"'; then
+            uses_local_proxy=true
+        fi
+    fi
+
+    if [ "$uses_local_proxy" = true ]; then
+        print_info "檢測到使用本地 Proxy，檢查服務狀態..."
+        echo ""
+        bash scripts/manage.sh check-proxy
+        echo ""
+    else
+        print_success "當前使用原廠 API，無需本地 Proxy"
+        echo ""
+        print_info "原廠 providers 配置："
+        echo "  - glm-4.7: api.z.ai (需設置 GLM_API_KEY)"
+        echo "  - minimax-m2.1: api.minimax.io (需設置 MINIMAX_API_KEY)"
+        echo ""
+    fi
 }
 
 # ============================================================

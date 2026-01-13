@@ -1,5 +1,6 @@
 import os, argparse, duckdb, pathlib, re, json
 from pathlib import Path
+from typing import List, Dict, Optional, Callable
 
 TEXT_EXTS = {".md",".txt",".rst",".py",".go",".js",".ts",".tsx",".java",".kt",".c",".cpp",".h",".hpp",".cs",".rb",".php",".sh",".yaml",".yml",".toml",".ini",".json"}
 
@@ -10,6 +11,125 @@ IGNORE_DIRS = {
     ".pytest_cache", ".mypy_cache", ".tox", ".eggs",
     "*.egg-info", ".cache", ".sass-cache", "bower_components"
 }
+
+# ============================================================
+# Functions for incremental_indexer.py
+# ============================================================
+
+def load_gitignore(project_root: Path) -> Optional[Callable[[Path], bool]]:
+    """
+    Load .gitignore patterns from project root.
+    Returns a callable that checks if a path should be ignored.
+    """
+    gitignore_path = project_root / ".gitignore"
+    if not gitignore_path.exists():
+        return None
+
+    try:
+        import pathspec
+        with open(gitignore_path, 'r', encoding='utf-8') as f:
+            patterns = f.read().splitlines()
+        spec = pathspec.PathSpec.from_lines('gitwildmatch', patterns)
+
+        def matcher(path: Path) -> bool:
+            try:
+                rel_path = path.relative_to(project_root)
+                return spec.match_file(str(rel_path))
+            except ValueError:
+                return False
+
+        return matcher
+    except ImportError:
+        # pathspec not installed, return simple matcher
+        patterns = []
+        with open(gitignore_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    patterns.append(line)
+
+        def simple_matcher(path: Path) -> bool:
+            try:
+                rel_path = str(path.relative_to(project_root))
+                for pattern in patterns:
+                    if pattern in rel_path:
+                        return True
+                return False
+            except ValueError:
+                return False
+
+        return simple_matcher
+    except Exception:
+        return None
+
+
+def should_skip_file(file_path: Path) -> bool:
+    """
+    Check if a file should be skipped during indexing.
+    Combines extension check and directory ignore patterns.
+    """
+    # Check extension
+    if file_path.suffix.lower() not in TEXT_EXTS:
+        return True
+
+    # Check ignored directories
+    if should_ignore_path(file_path):
+        return True
+
+    # Skip hidden files
+    if file_path.name.startswith('.'):
+        return True
+
+    # Skip very large files (>1MB)
+    try:
+        if file_path.stat().st_size > 1024 * 1024:
+            return True
+    except Exception:
+        return True
+
+    return False
+
+
+def parse_file_with_tree_sitter(file_path: Path, project_root: Path) -> List[Dict]:
+    """
+    Parse a file and return chunks.
+
+    Note: Currently uses simple text chunking.
+    Tree-sitter integration planned for v1.3.0.
+
+    Returns:
+        List of chunks: [{"text": "...", "source": "file:line"}, ...]
+    """
+    content = read_text(file_path)
+    if not content:
+        return []
+
+    chunks = []
+    try:
+        rel_path = str(file_path.relative_to(project_root))
+    except ValueError:
+        rel_path = str(file_path)
+
+    # Simple line-based chunking with context
+    lines = content.split('\n')
+    chunk_size = 50  # lines per chunk
+    overlap = 10     # overlap lines
+
+    i = 0
+    while i < len(lines):
+        chunk_lines = lines[i:i + chunk_size]
+        chunk_text = '\n'.join(chunk_lines)
+
+        if chunk_text.strip():
+            chunks.append({
+                "text": chunk_text,
+                "source": f"{rel_path}:{i + 1}"
+            })
+
+        i += max(1, chunk_size - overlap)
+
+    return chunks
+
 
 def should_ignore_path(p: Path) -> bool:
     """Check if path should be ignored based on common patterns."""

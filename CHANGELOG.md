@@ -5,6 +5,34 @@ All notable changes to augment-lite MCP server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-01-14
+
+### 🔧 Bug Fixes
+- **Fixed `sys` import bug**: `rag_search` with `auto_index=true` no longer crashes due to missing `sys` import
+- **Fixed incremental_indexer**: Added missing functions (`load_gitignore`, `should_skip_file`, `parse_file_with_tree_sitter`) to `build_index.py`
+- **Fixed setup scripts**: `setup_new_machine.sh` and `manage.sh` now correctly detect 原廠 API vs local proxy mode
+
+### ✨ New Features
+- **AUTO-INIT workflow**: Projects auto-initialize when running `rag_search` without manual `project.init`
+- **auggie-mcp collaboration modes**: Added Mode A/B/C documentation for MCP server coordination
+- **Serena-style memory patterns**: Proactive memory system with standard keys (`project_overview`, `code_style`, etc.)
+
+### 📚 Documentation
+- Added BM25+Vector technical architecture diagram to README
+- Added execution logic flow diagram (Auto-Init → Auto-Index → Search)
+- Added auggie-mcp integration section with collaboration modes
+
+---
+
+## [1.2.0] - 2025-01-13
+
+### 🛡️ Modern Guardrails Module
+- Added configurable guardrails for MCP tool safety
+- Implemented per-tool enable/disable settings
+- Added audit logging for tool invocations
+
+---
+
 ## [1.0.0] - 2025-11-10
 
 ### 🎉 First Stable Release
@@ -262,7 +290,7 @@ cd augment-lite-mcp
 # Install dependencies
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-lock.txt
+uv pip install -r requirements-lock.txt
 
 # Optional: Install vector search dependencies (~2GB)
 bash scripts/install_vector_deps.sh
