@@ -21,4 +21,4 @@ export AUGMENT_DB_DIR="$ROOT/data"
 # export REQUESTY_API_KEY="sk-..."
 
 echo "Starting augment-lite-mcp server (stdio). Press Ctrl+C to stop."
-python server.py
+python -u mcp_bridge_lazy.py

@@ -2,7 +2,7 @@
   "mcpServers": {
     "augment-lite": {
       "command": "python",
-      "args": ["__ABS__/server.py"],
+      "args": ["-u", "__ABS__/mcp_bridge_lazy.py"],
       "env": {
         "AUGMENT_DB_DIR": "__ABS__/data",
         "GLM_BASE_URL": "http://127.0.0.1:8082/v1",

@@ -9,4 +9,4 @@ COPY requirements.txt ./
 RUN uv pip install --system --no-cache -r requirements.txt
 COPY . .
 ENV AUGMENT_DB_DIR=/app/data
-CMD ["python", "server.py"]
+CMD ["python", "-u", "mcp_bridge_lazy.py"]
