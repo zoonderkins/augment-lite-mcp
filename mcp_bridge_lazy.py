@@ -1,11 +1,15 @@
 # mcp_bridge_lazy.py — ultra-fast startup MCP stdio server (lazy imports)
-# pip install "mcp>=1.1,<2"
+# uv pip install "mcp>=1.1,<2"
 
 import asyncio
 import json
 import os
+import traceback
 from typing import Any
 from pathlib import Path
+
+# Debug mode - set AUGMENT_DEBUG=true to expose stack traces
+DEBUG = os.getenv("AUGMENT_DEBUG", "false").lower() == "true"
 
 # Load environment variables from .env file (if exists)
 # This allows using .env for development while still supporting
@@ -422,6 +426,150 @@ NOTE: Indexing takes 10-60s depending on codebase size""",  # 初始化專案（
         },
         # outputSchema omitted for token efficiency
     ),
+    # ============================================================
+    # Code Analysis Tools (Serena-like)
+    # ============================================================
+    Tool(
+        name="code.symbols",
+        description="""Get code symbols overview (classes, functions, methods) from a file.
+
+WHEN TO USE:
+• Understanding file structure before editing
+• Finding specific class or function definitions
+• Navigating unfamiliar code
+
+Returns symbol hierarchy with line numbers.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "File path (relative to project root or absolute)"},
+                "depth": {"type": "integer", "default": 2, "description": "Symbol depth (1=top-level, 2=include methods)"},
+                "include_body": {"type": "boolean", "default": False, "description": "Include source code body"},
+                "project": {"type": "string", "default": "auto"}
+            },
+            "required": ["file_path"]
+        },
+    ),
+    Tool(
+        name="code.find_symbol",
+        description="""Find symbol definition by name pattern.
+
+WHEN TO USE:
+• Looking for specific class/function by name
+• Exploring codebase structure
+• Before making cross-file changes
+
+Searches all Python files in project.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Symbol name or prefix (e.g., 'MyClass', 'handle_')"},
+                "file_path": {"type": "string", "description": "Optional: limit search to specific file"},
+                "include_body": {"type": "boolean", "default": True, "description": "Include source code"},
+                "project": {"type": "string", "default": "auto"}
+            },
+            "required": ["pattern"]
+        },
+    ),
+    Tool(
+        name="code.references",
+        description="""Find all references to a symbol in the codebase.
+
+WHEN TO USE:
+• Before renaming or refactoring
+• Understanding symbol usage patterns
+• Finding all call sites
+
+Returns file, line, and context for each reference.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Symbol name to find references for"},
+                "context_lines": {"type": "integer", "default": 2, "description": "Lines of context"},
+                "project": {"type": "string", "default": "auto"}
+            },
+            "required": ["symbol"]
+        },
+    ),
+    Tool(
+        name="search.pattern",
+        description="""Search files using regex pattern (complements rag.search semantic search).
+
+WHEN TO USE:
+• Exact pattern matching (regex)
+• Finding specific code patterns
+• When semantic search is too fuzzy
+
+Unlike rag.search, this is literal/regex match, not semantic.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Regex pattern to search"},
+                "file_glob": {"type": "string", "default": "**/*", "description": "File filter (e.g., '**/*.py')"},
+                "context_lines": {"type": "integer", "default": 2},
+                "case_sensitive": {"type": "boolean", "default": True},
+                "project": {"type": "string", "default": "auto"}
+            },
+            "required": ["pattern"]
+        },
+    ),
+    # ============================================================
+    # File Operations Tools (Serena-like)
+    # ============================================================
+    Tool(
+        name="file.read",
+        description="""Read file content with optional line range.
+
+WHEN TO USE:
+• Reading specific file sections
+• Viewing code around specific line numbers
+• Getting file content for analysis""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File path"},
+                "start_line": {"type": "integer", "description": "Start line (1-indexed)"},
+                "end_line": {"type": "integer", "description": "End line (1-indexed)"},
+                "project": {"type": "string", "default": "auto"}
+            },
+            "required": ["path"]
+        },
+    ),
+    Tool(
+        name="file.list",
+        description="""List directory contents.
+
+WHEN TO USE:
+• Exploring project structure
+• Finding files in a directory
+• Understanding folder organization""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "default": ".", "description": "Directory path"},
+                "recursive": {"type": "boolean", "default": False},
+                "pattern": {"type": "string", "description": "Glob pattern filter (e.g., '*.py')"},
+                "project": {"type": "string", "default": "auto"}
+            },
+        },
+    ),
+    Tool(
+        name="file.find",
+        description="""Find files by glob pattern.
+
+WHEN TO USE:
+• Finding all files of a type
+• Locating specific files
+• Understanding project file distribution""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Glob pattern (e.g., '**/*.py', 'src/**/*.ts')"},
+                "project": {"type": "string", "default": "auto"}
+            },
+            "required": ["pattern"]
+        },
+    ),
 ]
 
 @server.list_tools()
@@ -804,6 +952,7 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
     if name == "project.init":
         import subprocess
         import sys
+        from utils.validators import validate_project_path, validate_project_name
 
         project = args.get("project", "auto")
         build_vector = bool(args.get("build_vector", True))
@@ -811,9 +960,22 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
         # Get current working directory as project root
         cwd = os.getcwd()
 
+        # Validate path (security: prevent command injection)
+        try:
+            validated_cwd = validate_project_path(cwd)
+            cwd = str(validated_cwd)
+        except ValueError as e:
+            return {"ok": False, "error": f"Invalid project path: {e}"}
+
         # Auto-detect project name if needed
         if project == "auto":
             project = Path(cwd).name
+
+        # Validate project name (security: prevent injection)
+        try:
+            project = validate_project_name(project, allow_auto=False)
+        except ValueError as e:
+            return {"ok": False, "error": f"Invalid project name: {e}"}
 
         # Direct import to avoid E dictionary issues
         from utils.project_utils import auto_register_project, has_bm25_index, get_project_status
@@ -932,6 +1094,7 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
     if name == "index.rebuild":
         import subprocess
         import sys
+        from utils.validators import validate_project_name, validate_project_path
 
         # Direct import to avoid E dictionary issues - import at the beginning
         from utils.project_utils import is_project_registered, get_active_project, get_project_status
@@ -950,10 +1113,16 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
                         "ok": False,
                         "error": "Cannot determine project: no active project and current directory not registered"
                     }
+
+            # Validate project name (security)
+            project = validate_project_name(project, allow_auto=False)
+
+        except ValueError as e:
+            return {"ok": False, "error": f"Invalid project name: {e}"}
         except Exception as e:
             return {
                 "ok": False,
-                "error": f"Failed to determine project: {str(e)}"
+                "error": f"Failed to determine project: {str(e)}" if DEBUG else "Failed to determine project"
             }
 
         if not project:
@@ -965,6 +1134,13 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
         # Now get_project_status is properly imported
         status = get_project_status(project)
         root = status.get("root")
+
+        # Validate root path (security)
+        if root:
+            try:
+                root = str(validate_project_path(root))
+            except ValueError as e:
+                return {"ok": False, "error": f"Invalid project root: {e}"}
 
         # If project not registered yet, use current directory as root
         if not root:
@@ -1046,13 +1222,154 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
 
         return response_data
 
+    # ============================================================
+    # Code Analysis Tools (Serena-like)
+    # ============================================================
+    if name == "code.symbols":
+        from code.symbols import extract_symbols
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        file_path = str(args.get("file_path", ""))
+        depth = int(args.get("depth", 2))
+        include_body = bool(args.get("include_body", False))
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        # Resolve file path
+        full_path = Path(file_path)
+        if not full_path.is_absolute():
+            full_path = Path(project_root) / file_path
+
+        if not full_path.exists():
+            return {"ok": False, "error": f"File not found: {file_path}"}
+
+        symbols = extract_symbols(str(full_path), depth=depth, include_body=include_body)
+        return {"ok": True, "file": str(full_path), "symbols": symbols, "count": len(symbols)}
+
+    if name == "code.find_symbol":
+        from code.symbols import find_symbol
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        pattern = str(args.get("pattern", ""))
+        file_path = args.get("file_path")
+        include_body = bool(args.get("include_body", True))
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        results = find_symbol(
+            pattern,
+            file_path=file_path,
+            project_root=project_root,
+            include_body=include_body
+        )
+        return {"ok": True, "pattern": pattern, "results": results, "count": len(results)}
+
+    if name == "code.references":
+        from code.references import find_references
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        symbol = str(args.get("symbol", ""))
+        context_lines = int(args.get("context_lines", 2))
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        results = find_references(symbol, project_root, context_lines=context_lines)
+        return {"ok": True, "symbol": symbol, "references": results, "count": len(results)}
+
+    if name == "search.pattern":
+        from code.pattern_search import search_pattern
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        pattern = str(args.get("pattern", ""))
+        file_glob = str(args.get("file_glob", "**/*"))
+        context_lines = int(args.get("context_lines", 2))
+        case_sensitive = bool(args.get("case_sensitive", True))
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        results = search_pattern(
+            pattern, project_root,
+            file_glob=file_glob,
+            context_lines=context_lines,
+            case_sensitive=case_sensitive
+        )
+        return {"ok": True, "pattern": pattern, "matches": results, "count": len(results)}
+
+    # ============================================================
+    # File Operations Tools (Serena-like)
+    # ============================================================
+    if name == "file.read":
+        from file.reader import read_file
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        path = str(args.get("path", ""))
+        start_line = args.get("start_line")
+        end_line = args.get("end_line")
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        result = read_file(path, project_root=project_root, start_line=start_line, end_line=end_line)
+        return result
+
+    if name == "file.list":
+        from file.finder import list_directory
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        path = str(args.get("path", "."))
+        recursive = bool(args.get("recursive", False))
+        pattern = args.get("pattern")
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        result = list_directory(path, project_root=project_root, recursive=recursive, pattern=pattern)
+        return result
+
+    if name == "file.find":
+        from file.finder import find_files
+        from utils.project_utils import get_project_status, resolve_auto_project
+
+        pattern = str(args.get("pattern", ""))
+        project = args.get("project", "auto")
+
+        # Resolve project root
+        project_name = resolve_auto_project() if project == "auto" else project
+        status = get_project_status(project_name) if project_name else {}
+        project_root = status.get("root", os.getcwd())
+
+        result = find_files(pattern, project_root)
+        return result
+
     return {"ok": False, "error": f"unknown tool {name}"}
 
 async def amain():
     async with stdio_server() as (read, write):
         init_options = InitializationOptions(
             server_name="augment-lite",
-            server_version="0.5.0",
+            server_version="1.1.0",
             capabilities=server.get_capabilities(
                 notification_options=NotificationOptions(),
                 experimental_capabilities={},

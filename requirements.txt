@@ -17,12 +17,12 @@ rank-bm25>=0.2.2
 
 # 向量檢索（需要先安裝 PyTorch）
 # 注意：請使用 scripts/install_vector_deps.sh 安裝，或手動執行：
-#   macOS: pip install torch torchvision torchaudio
-#   Linux: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+#   macOS: uv pip install torch torchvision torchaudio
+#   Linux: uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
 faiss-cpu>=1.9.0
 sentence-transformers>=3.3.0
-numpy>=1.26.0,<2.0.0  # 必須使用 1.x 版本，2.x 與 PyTorch/FAISS 不相容
+numpy>=1.26.0  # NumPy 2.x 現已支援 PyTorch/FAISS (2025+)
 
 # 環境變數管理
 python-dotenv>=1.0.0

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-測試 rag.generate (answer.generate) 使用不同本地 Proxy Port 的情境
+測試 rag.generate (answer.generate) 使用不同 Provider 的情境
 
-測試本地 Proxy 端口：
-- Port 8081: kimi-k2-0905
-- Port 8082: glm-4.6
-- Port 8083: minimaxi-m2
-- Port 8084: gemini-local
+Provider 配置:
+- glm-4.7:        原厂直连 (api.z.ai/api/anthropic) - 200K context
+- minimax-m2.1:   原厂直连 (api.minimax.io/anthropic) - 200K context
+- glm-local:      本地代理 (Port 8082, 可選)
+- minimax-local:  本地代理 (Port 8083, 可選)
 
 測試策略：
-1. 測試每個 proxy 的連線性（health check）
-2. 測試 route 配置是否正確指向各個 proxy
+1. 測試本地 Proxy 端口可用性（可選）
+2. 測試 route 配置是否正確
 3. 測試 answer.generate 使用不同 route 是否正常工作
 4. 測試 Guardrails 機制在不同模型下是否一致
 """
@@ -36,16 +36,16 @@ def check_port_open(port: int, host: str = "127.0.0.1", timeout: int = 2) -> boo
         return False
 
 def test_proxy_availability():
-    """測試 1: 檢查本地 Proxy 端口可用性"""
+    """測試 1: 檢查本地 Proxy 端口可用性（可選）"""
     print("\n" + "="*80)
-    print("測試 1: 本地 Proxy 端口可用性檢查")
+    print("測試 1: 本地 Proxy 端口可用性檢查（可選）")
     print("="*80)
 
+    print("\n   ℹ️  默認配置使用原厂 API，本地 Proxy 為可選")
+
     proxies = {
-        8081: "kimi-k2-0905",
-        8082: "glm-4.6",
-        8083: "minimaxi-m2",
-        8084: "gemini-local"
+        8082: "glm-local",
+        8083: "minimax-local",
     }
 
     available_proxies = {}
@@ -58,18 +58,10 @@ def test_proxy_availability():
             print(f"   ✅ Port {port} ({name}): 可用")
         else:
             unavailable_proxies[port] = name
-            print(f"   ⚠️  Port {port} ({name}): 無法連接")
+            print(f"   ℹ️  Port {port} ({name}): 未啟動")
 
-    print(f"\n   可用端口: {len(available_proxies)}/{len(proxies)}")
-
-    if len(available_proxies) == 0:
-        print("   ❌ 沒有可用的本地 Proxy，測試無法繼續")
-        print("   📝 提示: 請啟動本地 proxy 服務")
-        return False, available_proxies
-    elif len(available_proxies) < len(proxies):
-        print(f"   ⚠️  部分 Proxy 不可用，將僅測試可用的端口")
-    else:
-        print(f"   ✅ 所有本地 Proxy 端口可用")
+    print(f"\n   本地 Proxy 可用: {len(available_proxies)}/{len(proxies)}")
+    print(f"   ℹ️  原厂 API 始終可用（無需本地 Proxy）")
 
     return True, available_proxies
 
@@ -102,10 +94,10 @@ def test_route_configuration():
         print("\n   🔍 Route 與 Provider 對應:")
 
         route_to_proxy = {
-            "small-fast": ("minimaxi-m2", 8083),
-            "general": ("glm-4.6", 8082),
-            "long-context": ("gemini-local", 8084),
-            "reason-large": ("requesty-qwen3-coder", None),  # Requesty (雲端)
+            "small-fast": ("minimax-m2.1", None),           # 原厂 Anthropic 格式
+            "general": ("glm-4.7", None),                   # 原厂 Anthropic 格式
+            "long-context": ("requesty-qwen3-coder", None), # Requesty 雲端
+            "reason-large": ("glm-4.7", None),              # 原厂 Anthropic 格式
         }
 
         for route_name, (expected_provider, expected_port) in route_to_proxy.items():
@@ -209,10 +201,8 @@ def test_answer_generate_with_routes(available_proxies):
 
                 # 檢查模型是否對應到可用的 proxy
                 model_to_port = {
-                    "kimi-k2-0905": 8081,
-                    "glm-4.6": 8082,
-                    "minimaxi-m2": 8083,
-                    "gemini-local": 8084
+                    "glm-local": 8082,
+                    "minimax-local": 8083,
                 }
 
                 if model in model_to_port:
@@ -277,67 +267,56 @@ def test_answer_generate_with_routes(available_proxies):
         return False
 
 def test_port_specific_features():
-    """測試 4: 測試各個 Port 的特定功能"""
+    """測試 4: Provider 配置和功能測試"""
     print("\n" + "="*80)
-    print("測試 4: 各 Port 特定功能測試")
+    print("測試 4: Provider 配置功能測試")
     print("="*80)
 
-    print("\n   📋 Port 功能對應:")
-    print("      Port 8081 (kimi-k2-0905):")
-    print("         - 用於: small-fast 路由（當 total_tokens ≤ 200k 且 task=lookup）")
-    print("         - 特點: 快速查詢，短回答（max_tokens: 2048）")
+    print("\n   📋 原厂 Provider 配置:")
+    print("      glm-4.7 (原厂 Anthropic 格式):")
+    print("         - Endpoint: https://api.z.ai/api/anthropic")
+    print("         - 用於: general, reason-large, big-mid 路由")
+    print("         - Context: 200K tokens")
+    print("         - Max Output: 128K tokens")
+
+    print("\n      minimax-m2.1 (原厂 Anthropic 格式):")
+    print("         - Endpoint: https://api.minimax.io/anthropic")
+    print("         - 用於: small-fast, fast-reasoning 路由")
     print("         - Context: 200K tokens")
 
-    print("\n      Port 8082 (glm-4.6):")
-    print("         - 用於: general 路由（當 total_tokens ≤ 200k 且 task=general）")
-    print("         - 特點: 一般查詢，中等長度（max_tokens: 4096）")
-    print("         - Context: 200K tokens")
-    print("         - 備註: GLM-4.6 需要 min_tokens=10000（推理模式）")
+    print("\n   📋 本地代理 Provider 配置 (可選):")
+    print("      glm-local (Port 8082):")
+    print("         - 需啟動 claude-code-proxy")
+    print("         - 設置 GLM_LOCAL_* 環境變數")
 
-    print("\n      Port 8083 (minimaxi-m2):")
-    print("         - 用於: small-fast 路由（預設）")
-    print("         - 特點: 快速查詢，短回答（max_tokens: 2048）")
-    print("         - Context: 200K tokens")
-    print("         - 備註: MiniMax-M2 需要 min_tokens=500")
+    print("\n      minimax-local (Port 8083):")
+    print("         - 需啟動 claude-code-proxy")
+    print("         - 設置 MINIMAX_LOCAL_* 環境變數")
 
-    print("\n      Port 8084 (gemini-local):")
-    print("         - 用於: long-context 路由（當 400k < total_tokens ≤ 1M）")
-    print("         - 特點: 長上下文，長回答（max_tokens: 8192）")
-    print("         - Context: 1M tokens")
-    print("         - 備註: Gemini-2.5-Flash 需要 min_tokens=100")
-
-    # 檢查 providers/registry.py 中的 min_tokens 配置
-    print("\n   🔍 檢查 min_tokens 配置:")
+    # 檢查 providers/registry.py 中的配置
+    print("\n   🔍 檢查 Provider 配置:")
 
     try:
-        from providers.registry import openai_chat
+        from providers.registry import get_provider
 
-        # 讀取 registry.py 來驗證 min_tokens 配置
-        registry_path = BASE / "providers" / "registry.py"
-        with open(registry_path, "r", encoding="utf-8") as f:
-            registry_content = f.read()
+        # 測試原厂 Provider 配置
+        providers_to_check = ["glm-4.7", "minimax-m2.1"]
 
-        min_tokens_configs = {
-            "glm-4.6": 10000,
-            "minimaxi-m2": 500,
-            "gemini": 100,
-            "kimi-k2": 50
-        }
+        for provider_name in providers_to_check:
+            try:
+                provider = get_provider(provider_name)
+                print(f"      ✅ {provider_name}:")
+                print(f"         base: {provider.get('base', 'N/A')}")
+                print(f"         type: {provider.get('type', 'N/A')}")
+                print(f"         model_id: {provider.get('model_id', 'N/A')}")
+            except Exception as e:
+                print(f"      ⚠️  {provider_name}: 配置錯誤 - {e}")
 
-        for model, expected_min_tokens in min_tokens_configs.items():
-            if f'"{model}"' in registry_content and f"{expected_min_tokens}" in registry_content:
-                print(f"      ✅ {model}: min_tokens = {expected_min_tokens}")
-            elif model == "gemini" and "gemini" in registry_content.lower():
-                # Gemini 可能用不同的檢測方式
-                print(f"      ✅ gemini: min_tokens 配置已設置")
-            else:
-                print(f"      ⚠️  {model}: min_tokens 配置未找到或不符合預期")
-
-        print(f"\n   ✅ Port 特定功能檢查完成")
+        print(f"\n   ✅ Provider 配置檢查完成")
         return True
 
     except Exception as e:
-        print(f"\n   ⚠️  min_tokens 配置檢查失敗: {e}")
+        print(f"\n   ⚠️  Provider 配置檢查失敗: {e}")
         return True  # 不影響主要測試
 
 def main():

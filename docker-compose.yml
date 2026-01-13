@@ -1,6 +1,6 @@
 # ============================================================
 # augment-lite-mcp Docker Compose 配置
-# Version: 0.5.0
+# Version: 1.1.0
 # ============================================================
 
 version: '3.8'
@@ -10,7 +10,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: augment-lite-mcp:0.5.0
+    image: augment-lite-mcp:1.1.0
     container_name: augment-lite-mcp
     
     # MCP stdio 需要互動模式
@@ -32,12 +32,23 @@ services:
     environment:
       - AUGMENT_DB_DIR=/app/data
       - PYTHONUNBUFFERED=1
-      
+
       # API Keys（從 .env 讀取）
       - REQUESTY_API_KEY=${REQUESTY_API_KEY}
-      - KIMI_LOCAL_KEY=${KIMI_LOCAL_KEY:-dummy}
-      - GLM_LOCAL_KEY=${GLM_LOCAL_KEY:-dummy}
-      - MINIMAXI_LOCAL_KEY=${MINIMAXI_LOCAL_KEY:-dummy}
+
+      # GLM-4.7 原厂 (默认) - 需设置 GLM_API_KEY
+      - GLM_API_KEY=${GLM_API_KEY}
+
+      # MiniMax-M2.1 原厂 (默认) - 需设置 MINIMAX_API_KEY
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+
+      # 本地代理模式 (可选)
+      # - GLM_LOCAL_BASE_URL=${GLM_LOCAL_BASE_URL:-http://host.docker.internal:8082/v1}
+      # - GLM_LOCAL_API_KEY=${GLM_LOCAL_API_KEY:-dummy}
+      # - GLM_LOCAL_MODEL_ID=${GLM_LOCAL_MODEL_ID:-GLM-4.7}
+      # - MINIMAX_LOCAL_BASE_URL=${MINIMAX_LOCAL_BASE_URL:-http://host.docker.internal:8083/v1}
+      # - MINIMAX_LOCAL_API_KEY=${MINIMAX_LOCAL_API_KEY:-dummy}
+      # - MINIMAX_LOCAL_MODEL_ID=${MINIMAX_LOCAL_MODEL_ID:-MiniMax-M2.1}
     
     # 可選：使用本地 Proxy（macOS/Windows）
     # extra_hosts:

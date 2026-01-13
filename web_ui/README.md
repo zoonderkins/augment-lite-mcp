@@ -12,8 +12,6 @@
 
 ## Installation
 
-### Using uv (Recommended)
-
 ```bash
 cd web_ui
 
@@ -22,13 +20,6 @@ uv pip install -e .
 
 # For development dependencies
 uv pip install -e ".[dev]"
-```
-
-### Using pip
-
-```bash
-cd web_ui
-pip install -e .
 ```
 
 ## Running the Web UI

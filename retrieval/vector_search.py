@@ -32,7 +32,7 @@ def _lazy_imports():
             import faiss
             _faiss = faiss
         except ImportError:
-            logger.error("faiss-cpu not installed. Run: pip install faiss-cpu")
+            logger.error("faiss-cpu not installed. Run: uv pip install faiss-cpu")
             raise
     
     if _SentenceTransformer is None:
@@ -40,7 +40,7 @@ def _lazy_imports():
             from sentence_transformers import SentenceTransformer
             _SentenceTransformer = SentenceTransformer
         except ImportError:
-            logger.error("sentence-transformers not installed. Run: pip install sentence-transformers")
+            logger.error("sentence-transformers not installed. Run: uv pip install sentence-transformers")
             raise
     
     return _faiss, _SentenceTransformer

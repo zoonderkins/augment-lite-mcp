@@ -1,9 +1,9 @@
 # ============================================================
 # augment-lite-mcp Makefile
-# Version: 0.5.1
+# Version: 1.1.0
 # ============================================================
 
-VERSION := 0.5.1
+VERSION := 1.1.0
 
 .PHONY: help venv install install-lock install-vector index add-project list-projects \
         activate-project rebuild-project build-vector-index rebuild-vector-index \
@@ -76,16 +76,16 @@ venv:
 	@echo "請執行: source .venv/bin/activate"
 
 install:
-	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install -r requirements.txt
+	uv pip install --upgrade pip
+	uv pip install -r requirements.txt
 	@echo "✅ 基礎依賴已安裝（requirements.txt）"
 	@echo ""
 	@echo "💡 提示：如需啟用向量檢索功能，請執行："
 	@echo "   make install-vector"
 
 install-lock:
-	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install -r requirements-lock.txt
+	uv pip install --upgrade pip
+	uv pip install -r requirements-lock.txt
 	@echo "✅ 依賴已安裝（requirements-lock.txt）"
 
 install-vector:
@@ -251,9 +251,8 @@ docker-run:
 		-v $(PWD)/data:/app/data \
 		-v $(PWD)/config:/app/config \
 		-e AUGMENT_DB_DIR=/app/data \
-		-e KIMI_LOCAL_KEY=dummy \
-		-e GLM_LOCAL_KEY=dummy \
-		-e MINIMAXI_LOCAL_KEY=dummy \
+		-e GLM_API_KEY=$(GLM_API_KEY) \
+		-e MINIMAX_API_KEY=$(MINIMAX_API_KEY) \
 		-e REQUESTY_API_KEY=$(REQUESTY_API_KEY) \
 		augment-lite-mcp:$(VERSION)
 

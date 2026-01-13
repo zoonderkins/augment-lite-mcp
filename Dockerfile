@@ -1,30 +1,33 @@
 # ============================================================
 # augment-lite-mcp Dockerfile
-# Version: 0.5.0
+# Version: 1.1.0
 # 支援 MCP stdio 通訊
 # ============================================================
 
 FROM python:3.12-slim
 
-LABEL version="0.5.0"
+LABEL version="1.1.0"
 LABEL description="augment-lite-mcp: Local-first AI coding assistant with MCP support"
 LABEL maintainer="your-email@example.com"
 
 # 設定工作目錄
 WORKDIR /app
 
-# 安裝系統依賴
+# 安裝系統依賴和 uv
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh \
     && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.local/bin:$PATH"
 
 # 複製依賴檔案
 COPY requirements-lock.txt .
 
 # 安裝 Python 依賴
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements-lock.txt
+RUN uv pip install --system --no-cache -r requirements-lock.txt
 
 # 複製專案檔案
 COPY . .

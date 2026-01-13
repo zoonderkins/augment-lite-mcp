@@ -95,7 +95,7 @@ else
         if [ "$ARCH" = "arm64" ]; then
             # Apple Silicon - 使用預設 PyPI
             print_info "檢測到 Apple Silicon，安裝 PyTorch..."
-            pip install torch torchvision torchaudio
+            uv pip install torch torchvision torchaudio
         else
             # Intel Mac - 使用 Conda（PyPI 已不支援）
             print_warning "macOS Intel 需要使用 Conda 安裝 PyTorch"
@@ -126,11 +126,11 @@ else
     elif [ "$OS" = "Linux" ]; then
         # Linux - 使用 CPU 版本
         print_info "檢測到 Linux，安裝 PyTorch (CPU)..."
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
     else
         # Windows or other - 使用 CPU 版本
         print_info "安裝 PyTorch (CPU)..."
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
     fi
     
     print_success "PyTorch 安裝完成"
@@ -142,10 +142,10 @@ echo ""
 print_info "正在安裝 FAISS 和 sentence-transformers..."
 echo ""
 
-# 注意：必須使用 NumPy 1.x，2.x 與 PyTorch/FAISS 不相容
-pip install "numpy>=1.26.0,<2.0.0"
-pip install faiss-cpu>=1.9.0
-pip install sentence-transformers>=3.3.0
+# NumPy 2.x 現已支援 PyTorch/FAISS (2025+)
+uv pip install "numpy>=1.26.0"
+uv pip install faiss-cpu>=1.9.0
+uv pip install sentence-transformers>=3.3.0
 
 echo ""
 print_success "所有向量檢索依賴安裝完成！"

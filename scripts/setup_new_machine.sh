@@ -116,12 +116,12 @@ install_dependencies() {
     
     # 升級 pip
     print_info "升級 pip..."
-    pip install --upgrade pip > /dev/null 2>&1
-    
+    uv pip install --upgrade pip > /dev/null 2>&1
+
     # 安裝依賴
     if [ -f "requirements.txt" ]; then
         print_info "安裝依賴套件..."
-        pip install -r requirements.txt
+        uv pip install -r requirements.txt
         print_success "依賴套件已安裝"
     else
         print_warning "requirements.txt 不存在，跳過安裝"
@@ -159,9 +159,8 @@ configure_env() {
     echo ""
     print_info "請編輯 .env 檔案設置以下環境變數："
     echo "  - AUGMENT_DB_DIR (資料目錄路徑)"
-    echo "  - KIMI_LOCAL_KEY (Kimi API Key)"
-    echo "  - GLM_LOCAL_KEY (GLM API Key)"
-    echo "  - MINIMAXI_LOCAL_KEY (Minimaxi API Key)"
+    echo "  - GLM_BASE_URL / GLM_API_KEY (GLM endpoint 和 key)"
+    echo "  - MINIMAX_BASE_URL / MINIMAX_API_KEY (MiniMax endpoint 和 key)"
     echo "  - REQUESTY_API_KEY (Requesty API Key)"
     echo ""
     
@@ -389,9 +388,8 @@ show_next_steps() {
     echo "1. 配置 Claude Code CLI："
     echo "   claude mcp add --scope user --transport stdio augment-lite \\"
     echo "     --env AUGMENT_DB_DIR=\"$PROJECT_ROOT/data\" \\"
-    echo "     --env KIMI_LOCAL_KEY=\"dummy\" \\"
-    echo "     --env GLM_LOCAL_KEY=\"dummy\" \\"
-    echo "     --env MINIMAXI_LOCAL_KEY=\"dummy\" \\"
+    echo "     --env GLM_API_KEY=\"your-glm-key\" \\"
+    echo "     --env MINIMAX_API_KEY=\"your-minimax-key\" \\"
     echo "     --env REQUESTY_API_KEY=\"your-api-key\" \\"
     echo "     -- \"$PROJECT_ROOT/.venv/bin/python\" \\"
     echo "        \"-u\" \"$PROJECT_ROOT/mcp_bridge_lazy.py\""

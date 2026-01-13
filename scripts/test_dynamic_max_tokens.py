@@ -23,20 +23,20 @@ def test_route_config():
     
     test_cases = [
         # (task_type, total_tokens_est, route_override, expected_model, expected_max_tokens)
-        ("lookup", 50000, None, "glm-4.6", 2048),           # small-fast
-        ("small_fix", 50000, None, "glm-4.6", 2048),        # small-fast
-        ("refactor", 50000, None, "glm-4.6", 4096),         # reason-large
-        ("reason", 50000, None, "glm-4.6", 4096),           # reason-large
-        ("general", 50000, None, "glm-4.6", 4096),          # general
-        ("lookup", 250000, None, "requesty-gpt5", 8192),    # big-mid (>200k)
-        ("lookup", 450000, None, "requesty-gemini", 8192),  # long-context (>400k)
-        
+        ("lookup", 50000, None, "minimax-m2.1", 2048),         # small-fast
+        ("small_fix", 50000, None, "minimax-m2.1", 2048),      # small-fast
+        ("refactor", 50000, None, "glm-4.7", 8192),            # reason-large
+        ("reason", 50000, None, "glm-4.7", 8192),              # reason-large
+        ("general", 50000, None, "glm-4.7", 4096),             # general
+        ("lookup", 250000, None, "glm-4.7", 8192),             # big-mid (>200k)
+        ("lookup", 450000, None, "requesty-qwen3-coder", 8192),  # long-context (>400k)
+
         # Test route overrides
-        ("lookup", 50000, "small-fast", "glm-4.6", 2048),
-        ("lookup", 50000, "reason-large", "glm-4.6", 4096),
-        ("lookup", 50000, "general", "glm-4.6", 4096),
-        ("lookup", 50000, "big-mid", "requesty-gpt5", 8192),
-        ("lookup", 50000, "long-context", "requesty-gemini", 8192),
+        ("lookup", 50000, "small-fast", "minimax-m2.1", 2048),
+        ("lookup", 50000, "reason-large", "glm-4.7", 8192),
+        ("lookup", 50000, "general", "glm-4.7", 4096),
+        ("lookup", 50000, "big-mid", "glm-4.7", 8192),
+        ("lookup", 50000, "long-context", "requesty-qwen3-coder", 8192),
     ]
     
     all_passed = True

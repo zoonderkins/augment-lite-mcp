@@ -24,7 +24,7 @@ def _lazy_vector_search():
             from retrieval.vector_search import VectorSearchEngine
             _VectorSearchEngine = VectorSearchEngine
         except ImportError:
-            logging.warning("Vector search not available. Install: pip install faiss-cpu sentence-transformers")
+            logging.warning("Vector search not available. Install: uv pip install faiss-cpu sentence-transformers")
             _VectorSearchEngine = False
     return _VectorSearchEngine if _VectorSearchEngine is not False else None
 

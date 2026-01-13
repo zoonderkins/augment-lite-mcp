@@ -2,7 +2,7 @@
 
 > **Zero-Maintenance AI Code Assistant** - Local-first, cost-effective, privacy-safe
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/yourusername/augment-lite-mcp/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/yourusername/augment-lite-mcp/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.1+-green.svg)](https://github.com/anthropics/mcp)
@@ -52,9 +52,10 @@ Layer 1: 本地 PyTorch 嵌入 (sentence-transformers)
   → 50 個候選結果
   → 模型: all-MiniLM-L6-v2 (384 dims, 90MB)
 
-Layer 2: Gemini LLM 智能過濾
+Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
   → 語義理解 + 去重
   → 最終 8 個高質量結果
+  → 使用原廠 Anthropic 格式 API
 ```
 
 **結果**:
@@ -133,15 +134,23 @@ cd web_ui && ./start.sh  # http://localhost:8080
 git clone https://github.com/yourusername/augment-lite-mcp.git
 cd augment-lite-mcp
 
-# 2. 安裝依賴
-python3 -m venv .venv
+# 2. 安裝依賴 (使用 uv)
+uv venv .venv
 source .venv/bin/activate
-pip install -r requirements-lock.txt
+uv pip install -r requirements.txt
 
-# 3. (可選) 安裝向量搜索依賴 (~2GB)
+# 或使用標準 Python
+# python3 -m venv .venv && source .venv/bin/activate
+# pip install -r requirements.txt
+
+# 3. 配置 API Keys
+cp .env.example .env
+# 編輯 .env 填入 GLM_API_KEY 和 MINIMAX_API_KEY
+
+# 4. (可選) 安裝向量搜索依賴 (~2GB)
 bash scripts/install_vector_deps.sh
 
-# 4. 添加專案並建立索引
+# 5. 添加專案並建立索引
 ./scripts/manage.sh add auto .
 ```
 
@@ -153,14 +162,12 @@ bash scripts/install_vector_deps.sh
 # 使用 Claude MCP CLI 一鍵配置
 claude mcp add --scope user --transport stdio augment-lite \
   --env AUGMENT_DB_DIR="$HOME/augment-lite-mcp/data" \
-  --env KIMI_LOCAL_KEY="dummy" \
-  --env GLM_LOCAL_KEY="dummy" \
-  --env MINIMAXI_LOCAL_KEY="dummy" \
-  --env GEMINI_LOCAL_KEY="dummy" \
-  --env REQUESTY_API_KEY="your-requesty-api-key-here" \
-  -- "$HOME/augment-lite-mcp/.venv/bin/python" \
+  --env GLM_API_KEY="your-glm-api-key" \
+  --env MINIMAX_API_KEY="your-minimax-api-key" \
+-- "$HOME/augment-lite-mcp/.venv/bin/python" \
      "-u" "$HOME/augment-lite-mcp/mcp_bridge_lazy.py"
 ```
+
 
 #### 方式 2: 手動配置 JSON
 
@@ -174,11 +181,8 @@ claude mcp add --scope user --transport stdio augment-lite \
       "args": ["-u", "/absolute/path/to/mcp_bridge_lazy.py"],
       "env": {
         "AUGMENT_DB_DIR": "/absolute/path/to/data",
-        "KIMI_LOCAL_KEY": "dummy",
-        "GLM_LOCAL_KEY": "dummy",
-        "MINIMAXI_LOCAL_KEY": "dummy",
-        "GEMINI_LOCAL_KEY": "dummy",
-        "REQUESTY_API_KEY": "your-requesty-api-key-here"
+        "GLM_API_KEY": "your-glm-api-key",
+        "MINIMAX_API_KEY": "your-minimax-api-key"
       }
     }
   }
@@ -186,9 +190,31 @@ claude mcp add --scope user --transport stdio augment-lite \
 ```
 
 **環境變量說明**:
-- `AUGMENT_DB_DIR`: 數據目錄（索引、快取、記憶）
-- `REQUESTY_API_KEY`: Requesty.ai API 密鑰（必須）
-- `*_LOCAL_KEY`: 本地 Proxy 認證（可選，設為 "dummy" 如不使用）
+
+| 變量 | 必需 | 說明 |
+|------|------|------|
+| `AUGMENT_DB_DIR` | ✅ | 數據目錄（索引、快取、記憶） |
+| `GLM_API_KEY` | ✅ | GLM-4.7 原廠 API Key (從 z.ai 獲取) |
+| `MINIMAX_API_KEY` | ✅ | MiniMax-M2.1 原廠 API Key (從 minimax.io 獲取) |
+
+#### 方式 3: 本地代理模式 (可選)
+
+如需使用 [claude-code-proxy](https://github.com/anthropics/claude-code-proxy) 本地代理:
+
+```json
+{
+  "env": {
+    "GLM_LOCAL_BASE_URL": "http://127.0.0.1:8082/v1",
+    "GLM_LOCAL_API_KEY": "dummy",
+    "GLM_LOCAL_MODEL_ID": "GLM-4.7",
+    "MINIMAX_LOCAL_BASE_URL": "http://127.0.0.1:8083/v1",
+    "MINIMAX_LOCAL_API_KEY": "dummy",
+    "MINIMAX_LOCAL_MODEL_ID": "MiniMax-M2.1"
+  }
+}
+```
+
+然後修改 `config/models.yaml` 的 routes 使用 `glm-local` / `minimax-local`
 
 ### 使用
 
@@ -205,6 +231,95 @@ claude mcp add --scope user --transport stdio augment-lite \
 # 管理任務
 "添加任務：重構認證模組"
 ```
+
+---
+
+## 🚀 首次初始化
+
+當你在專案目錄首次執行 Claude CLI 時，augment-lite 會自動：
+
+```
+1. 專案偵測
+   └─ 自動識別當前工作目錄為專案
+
+2. 索引建立 (離線)
+   ├─ BM25 索引 (DuckDB) - 關鍵字搜索
+   └─ 向量索引 (FAISS) - 語義搜索 (可選)
+
+3. 快取初始化
+   ├─ 精確快取 (SQLite)
+   └─ 語義快取 (FAISS)
+
+4. 記憶體初始化
+   └─ 長期記憶 (SQLite)
+```
+
+**手動初始化：**
+```bash
+./scripts/manage.sh add auto .
+```
+
+---
+
+## 🔧 功能說明
+
+### RAG 功能 (離線)
+
+| Tool | 說明 | 用法 |
+|------|------|------|
+| `rag.search` | BM25 + 向量混合搜索 | 搜索代碼片段 |
+| `answer.generate` | 基於檢索結果生成答案 | 帶引用的回答 |
+| `index.rebuild` | 重建專案索引 | 索引損壞時使用 |
+| `index.status` | 檢查索引狀態 | 查看索引健康度 |
+
+### 代碼分析功能 (Serena 類似)
+
+| Tool | 說明 | 範例 |
+|------|------|------|
+| `code.symbols` | 獲取代碼符號概覽 | 列出類、函數、方法 |
+| `code.find_symbol` | 查找符號定義 | 找到 `MyClass` 定義位置 |
+| `code.references` | 查找符號引用 | 找到所有使用 `my_func` 的地方 |
+| `search.pattern` | 正則模式搜索 | `def.*search` 匹配 |
+| `file.read` | 讀取文件內容 | 支持行範圍 |
+| `file.list` | 列出目錄內容 | 支持 glob 過濾 |
+| `file.find` | 查找文件 | `**/*.py` 模式 |
+
+### 記憶與任務
+
+| Tool | 說明 |
+|------|------|
+| `memory.get/set/delete/list` | 長期記憶管理 |
+| `task.add/list/update/delete` | 任務追蹤 |
+| `project.init/status` | 專案管理 |
+| `cache.clear/status` | 快取管理 |
+
+---
+
+## 🔑 環境變數
+
+### 必需
+
+| 變數 | 說明 | 獲取 |
+|------|------|------|
+| `GLM_API_KEY` | GLM-4.7 原廠 API Key | [z.ai](https://z.ai) |
+| `MINIMAX_API_KEY` | MiniMax-M2.1 原廠 API Key | [minimax.io](https://minimax.io) |
+
+### 可選
+
+| 變數 | 說明 | 預設值 |
+|------|------|--------|
+| `AUGMENT_DB_DIR` | 數據目錄 | `./data` |
+
+### 本地代理 (可選)
+
+如需使用 claude-code-proxy：
+
+| 變數 | 說明 |
+|------|------|
+| `GLM_LOCAL_BASE_URL` | `http://127.0.0.1:8082/v1` |
+| `GLM_LOCAL_API_KEY` | `dummy` |
+| `MINIMAX_LOCAL_BASE_URL` | `http://127.0.0.1:8083/v1` |
+| `MINIMAX_LOCAL_API_KEY` | `dummy` |
 
 ---
 
@@ -236,11 +351,30 @@ claude mcp add --scope user --transport stdio augment-lite \
      │
 ┌────▼─────────────────────────────────┐
 │  Layer 2: Remote LLM Re-ranking      │
-│  - Gemini 2.5 Flash (Port 8084)      │
+│  - GLM-4.7 / MiniMax-M2.1 (原廠)     │
 │  - Smart filtering + deduplication   │
 │  - Final 8 results                   │
 └──────────────────────────────────────┘
 ```
+
+### 🤖 Providers 配置 (全部原廠)
+
+| Provider | Endpoint | Context | Max Output |
+|----------|----------|---------|------------|
+| **glm-4.7** | `api.z.ai/api/anthropic` | 200K | 128K |
+| **minimax-m2.1** | `api.minimax.io/anthropic` | 200K | - |
+
+### 📊 Routes 配置
+
+| Route | Provider | Max Output | 觸發條件 |
+|-------|----------|-----------|---------|
+| `small-fast` | minimax-m2.1 | 2048 | lookup, small_fix |
+| `general` | glm-4.7 | 4096 | general tasks |
+| `reason-large` | glm-4.7 | 8192 | refactor, reason |
+| `big-mid` | glm-4.7 | 8192 | tokens > 200K |
+| `long-context` | glm-4.7 | 8192 | tokens > 400K |
+| `ultra-long-context` | glm-4.7 | 16384 | 超長上下文 |
+| `fast-reasoning` | minimax-m2.1 | 4096 | 快速推理 |
 
 ---
 

@@ -20,7 +20,7 @@ def _lazy_semantic_cache():
             from semantic_cache import SemanticCache
             _SemanticCache = SemanticCache
         except ImportError:
-            logger.warning("Semantic cache not available. Install: pip install faiss-cpu sentence-transformers")
+            logger.warning("Semantic cache not available. Install: uv pip install faiss-cpu sentence-transformers")
             _SemanticCache = False
     return _SemanticCache if _SemanticCache is not False else None
 

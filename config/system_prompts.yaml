@@ -127,7 +127,7 @@ model_compatibility:
   # MiniMax 特殊處理
   minimax_models:
     models:
-      - "minimaxi/minimax-m2"
+      - "MiniMax-M2.1"
     supports_system_role: true
     system_instruction_format: "system_message"
     prefer_balanced: true
@@ -137,7 +137,7 @@ model_compatibility:
   # GLM 特殊處理
   glm_models:
     models:
-      - "zai/glm-4.6"
+      - "GLM-4.7"
     supports_system_role: true
     system_instruction_format: "system_message"
     prefer_balanced: true

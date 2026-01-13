@@ -5,75 +5,118 @@ defaults:
   timeout_ms: 60000
 
 providers:
-  # Local proxies (you keep them)
-  kimi-k2-0905:
-    base_url: "http://127.0.0.1:8081/v1"
-    api_key_env: "KIMI_LOCAL_KEY"
-    type: "openai-compatible"
-    model_id: "groq/moonshotai/kimi-k2-instruct-0905"  # 傳給 proxy 的模型名稱
-  glm-4.6:
-    base_url: "http://127.0.0.1:8082/v1"
-    api_key_env: "GLM_LOCAL_KEY"
-    type: "openai-compatible"
-    model_id: "zai/glm-4.6"  # 傳給 proxy 的模型名稱
-  minimaxi-m2:
-    base_url: "http://127.0.0.1:8083/v1"
-    api_key_env: "MINIMAXI_LOCAL_KEY"
-    type: "openai-compatible"
-    model_id: "minimaxi/minimax-m2"  # 傳給 proxy 的模型名稱
-  gemini-local:
-    base_url: "http://127.0.0.1:8084/v1"
-    api_key_env: "GEMINI_LOCAL_KEY"  # Port 8084 proxy 使用 "dummy" 即可
-    type: "openai-compatible"
-    model_id: "google/gemini-2.5-flash"  # 傳給 proxy 的模型名稱
+  # ============================================================
+  # GLM-4.7 原厂 (智谱 - Anthropic 格式)
+  # ============================================================
+  # 直连原厂 API，使用 Anthropic 格式
+  # 需设置: GLM_API_KEY (从 z.ai 获取)
+  glm-4.7:
+    base_url: "https://api.z.ai/api/anthropic"
+    api_key_env: "GLM_API_KEY"
+    type: "anthropic"
+    model_id: "GLM-4.7"
 
-  # Requesty.ai providers (fill model_id from their catalog)
+  # ============================================================
+  # GLM 本地代理 (claude-code-proxy)
+  # ============================================================
+  # 需先启动: start-all-proxies.sh (端口 8082)
+  # 设置: GLM_LOCAL_BASE_URL (可选覆盖)
+  glm-local:
+    base_url_env: "GLM_LOCAL_BASE_URL"
+    api_key_env: "GLM_LOCAL_API_KEY"
+    type: "openai-compatible"
+    model_id_env: "GLM_LOCAL_MODEL_ID"
+
+  # ============================================================
+  # MiniMax-M2.1 原厂 (Anthropic 格式)
+  # ============================================================
+  # 直连原厂 API，使用 Anthropic 格式
+  # 需设置: MINIMAX_API_KEY (从 minimax.io 获取)
+  minimax-m2.1:
+    base_url: "https://api.minimax.io/anthropic"
+    api_key_env: "MINIMAX_API_KEY"
+    type: "anthropic"
+    model_id: "MiniMax-M2.1"
+
+  # ============================================================
+  # MiniMax 本地代理 (claude-code-proxy)
+  # ============================================================
+  # 需先启动: start-all-proxies.sh (端口 8083)
+  # 设置: MINIMAX_LOCAL_BASE_URL (可选覆盖)
+  minimax-local:
+    base_url_env: "MINIMAX_LOCAL_BASE_URL"
+    api_key_env: "MINIMAX_LOCAL_API_KEY"
+    type: "openai-compatible"
+    model_id_env: "MINIMAX_LOCAL_MODEL_ID"
+
+  # ============================================================
+  # Gemini Provider (已禁用)
+  # ============================================================
+  # 如需启用，取消注释:
+  # gemini-2.5-flash:
+  #   base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+  #   api_key_env: "GEMINI_API_KEY"
+  #   type: "openai-compatible"
+  #   model_id: "gemini-2.5-flash"
+  #
+  # gemini-local:
+  #   base_url_env: "GEMINI_LOCAL_BASE_URL"
+  #   api_key_env: "GEMINI_LOCAL_API_KEY"
+  #   type: "openai-compatible"
+  #   model_id_env: "GEMINI_LOCAL_MODEL_ID"
+
+  # ============================================================
+  # Requesty.ai providers (聚合服务)
+  # ============================================================
   requesty-gpt5:
     base_url: "https://router.requesty.ai/v1"
     api_key_env: "REQUESTY_API_KEY"
     type: "openai-compatible"
-    model_id: "openai/gpt-5-chat"              # adjust per availability
+    model_id: "openai/gpt-5-chat"
   requesty-gemini:
     base_url: "https://router.requesty.ai/v1"
     api_key_env: "REQUESTY_API_KEY"
     type: "openai-compatible"
-    model_id: "google/gemini-2.5-flash"   # or gemini-2.5-*
+    model_id: "google/gemini-2.5-flash"
   requesty-qwen3-coder:
     base_url: "https://router.requesty.ai/v1"
     api_key_env: "REQUESTY_API_KEY"
     type: "openai-compatible"
-    model_id: "alibaba/qwen3-coder-plus"  # 1,048,576 tokens context
+    model_id: "alibaba/qwen3-coder-plus"
   requesty-claude-haiku:
     base_url: "https://router.requesty.ai/v1"
     api_key_env: "REQUESTY_API_KEY"
     type: "openai-compatible"
-    model_id: "anthropic/claude-haiku-4-5"  # 200,000 tokens context
+    model_id: "anthropic/claude-haiku-4-5"
 
+# ============================================================
+# Routes (默认使用原厂 providers)
+# ============================================================
+# 如需切换到本地代理，修改 model 为 glm-local / minimax-local
 routes:
   small-fast:
-    model: "minimaxi-m2"
-    max_output_tokens: 2048       # 快速查詢，短回答
+    model: "minimax-m2.1"
+    max_output_tokens: 2048
   reason-large:
-    model: "requesty-qwen3-coder"
-    max_output_tokens: 8192       # 推理任務，中等長度
+    model: "glm-4.7"
+    max_output_tokens: 8192
   general:
-    model: "glm-4.6"
-    max_output_tokens: 4096       # 一般查詢，中等長度
+    model: "glm-4.7"
+    max_output_tokens: 4096
   big-mid:
-    model: "requesty-gpt5"        # 200k~400k
-    max_output_tokens: 8192       # 大型任務，長回答
+    model: "glm-4.7"
+    max_output_tokens: 8192
   long-context:
-    model: "gemini-local"         # 400k~1M (使用本地 Port 8084 Gemini proxy)
-    max_output_tokens: 8192       # 長上下文，長回答
+    model: "glm-4.7"              # 使用原厂 GLM-4.7 (200K context)
+    max_output_tokens: 8192
   ultra-long-context:
-    model: "requesty-qwen3-coder" # >1M (up to 1,048,576 tokens)
-    max_output_tokens: 16384      # 超長上下文，完整回答
+    model: "glm-4.7"              # 使用原厂 GLM-4.7 (200K context)
+    max_output_tokens: 16384
   fast-reasoning:
-    model: "requesty-claude-haiku" # Claude Haiku 4.5 (fast + smart)
-    max_output_tokens: 4096       # 快速推理，中等長度
+    model: "minimax-m2.1"
+    max_output_tokens: 4096
 
 routing_thresholds:
-  small_max_tokens: 200000        # ≤200k → small-fast/reason-large/general
-  big_mid_max_tokens: 400000      # 200k~400k → big-mid
-  long_context_max_tokens: 1000000 # 400k~1M → long-context
-  # >1M → ultra-long-context
+  small_max_tokens: 200000
+  big_mid_max_tokens: 400000
+  long_context_max_tokens: 1000000

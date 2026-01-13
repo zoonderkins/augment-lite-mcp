@@ -95,6 +95,16 @@ sed -i.bak "s/Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Version: $NEW_VERSION/g" "$PROJ
 rm -f "$PROJECT_ROOT/Makefile.bak"
 echo -e "${GREEN}✓${NC} Updated Makefile"
 
+# Update pyproject.toml
+sed -i.bak "s/version = \"[0-9]\+\.[0-9]\+\.[0-9]\+\"/version = \"$NEW_VERSION\"/g" "$PROJECT_ROOT/pyproject.toml"
+rm -f "$PROJECT_ROOT/pyproject.toml.bak"
+echo -e "${GREEN}✓${NC} Updated pyproject.toml"
+
+# Update mcp_bridge_lazy.py
+sed -i.bak "s/server_version=\"[0-9]\+\.[0-9]\+\.[0-9]\+\"/server_version=\"$NEW_VERSION\"/g" "$PROJECT_ROOT/mcp_bridge_lazy.py"
+rm -f "$PROJECT_ROOT/mcp_bridge_lazy.py.bak"
+echo -e "${GREEN}✓${NC} Updated mcp_bridge_lazy.py"
+
 echo ""
 echo -e "${GREEN}============================================================${NC}"
 echo -e "${GREEN}Version updated successfully!${NC}"

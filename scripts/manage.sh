@@ -30,11 +30,11 @@ check_and_init_venv() {
 
         # 安裝基礎依賴
         echo -e "${BLUE}ℹ️  正在安裝基礎依賴...${NC}"
-        .venv/bin/pip install --upgrade pip > /dev/null 2>&1
+        uv pip install --upgrade pip > /dev/null 2>&1
 
         # 安裝核心依賴（不含向量檢索）
         if [ -f "requirements-lock.txt" ]; then
-            .venv/bin/pip install -r requirements-lock.txt > /dev/null 2>&1
+            uv pip install -r requirements-lock.txt > /dev/null 2>&1
         fi
 
         echo -e "${GREEN}✅ 基礎依賴已安裝${NC}"
@@ -194,7 +194,7 @@ add_project() {
         print_warning "向量檢索依賴未安裝，跳過向量索引建立"
         echo ""
         print_info "如需啟用向量檢索，請執行："
-        echo "  pip install -r requirements.txt"
+        echo "  uv pip install -r requirements.txt"
         echo "  python retrieval/build_vector_index.py $name"
     fi
     echo ""
@@ -310,7 +310,7 @@ rebuild_project() {
         print_warning "向量檢索依賴未安裝，跳過向量索引重建"
         echo ""
         print_info "如需啟用向量檢索，請執行："
-        echo "  pip install -r requirements.txt"
+        echo "  uv pip install -r requirements.txt"
     fi
     echo ""
 }
@@ -575,11 +575,7 @@ start_web_ui() {
         echo ""
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             print_info "正在安裝依賴..."
-            if command -v uv &> /dev/null; then
-                uv pip install -r requirements.txt
-            else
-                $PYTHON -m pip install -r requirements.txt
-            fi
+            uv pip install -r requirements.txt
             print_success "依賴安裝完成"
             echo ""
         else
@@ -617,13 +613,8 @@ install_web_ui_deps() {
     cd web_ui
 
     print_info "正在安裝依賴..."
-    if command -v uv &> /dev/null; then
-        uv pip install -r requirements.txt
-        print_success "使用 uv 安裝完成"
-    else
-        $PYTHON -m pip install -r requirements.txt
-        print_success "使用 pip 安裝完成"
-    fi
+    uv pip install -r requirements.txt
+    print_success "依賴安裝完成"
 
     cd ..
     echo ""

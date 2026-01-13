@@ -3,7 +3,7 @@
 
 set -e
 
-PROJECT_ROOT="$HOME/Downloads/augment-lite-mcp-v0.2.1"
+PROJECT_ROOT="$HOME/Downloads/augment-lite-mcp"
 cd "$PROJECT_ROOT"
 
 echo "========================================="
@@ -41,9 +41,9 @@ echo -e "\n${YELLOW}[Test 3]${NC} Testing manual execution (5 seconds timeout)..
 source .venv/bin/activate
 
 export AUGMENT_DB_DIR="$PROJECT_ROOT/data"
-export KIMI_LOCAL_KEY="dummy"
-export GLM_LOCAL_KEY="dummy"
-export MINIMAXI_LOCAL_KEY="dummy"
+export GLM_API_KEY="${GLM_API_KEY:-dummy}"
+export MINIMAX_API_KEY="${MINIMAX_API_KEY:-dummy}"
+export GEMINI_API_KEY="${GEMINI_API_KEY:-dummy}"
 export REQUESTY_API_KEY="${REQUESTY_API_KEY:-dummy}"
 
 # Send a test request to the server
@@ -89,9 +89,8 @@ if [ -f "$CLAUDE_CONFIG" ]; then
         echo ""
         echo "  claude mcp add --scope user --transport stdio augment-lite \\"
         echo "    --env AUGMENT_DB_DIR=\"$PROJECT_ROOT/data\" \\"
-        echo "    --env KIMI_LOCAL_KEY=\"dummy\" \\"
-        echo "    --env GLM_LOCAL_KEY=\"dummy\" \\"
-        echo "    --env MINIMAXI_LOCAL_KEY=\"dummy\" \\"
+        echo "    --env GLM_API_KEY=\"\$GLM_API_KEY\" \\"
+        echo "    --env MINIMAX_API_KEY=\"\$MINIMAX_API_KEY\" \\"
         echo "    --env REQUESTY_API_KEY=\"\$REQUESTY_API_KEY\" \\"
         echo "    -- \"$PROJECT_ROOT/.venv/bin/python\" \\"
         echo "       \"-u\" \"$PROJECT_ROOT/mcp_bridge_lazy.py\""
