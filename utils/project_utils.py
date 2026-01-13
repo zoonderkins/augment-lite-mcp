@@ -223,7 +223,7 @@ def get_memory_keys_count(project: str = "auto") -> int:
         import sqlite3
 
         if project == "auto":
-            project = get_active_project()
+            project = resolve_auto_project()
 
         if not project:
             project = ""  # Global memory

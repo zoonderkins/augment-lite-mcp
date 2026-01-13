@@ -4,6 +4,8 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
 
+from utils.project_utils import resolve_auto_project
+
 DB_PATH = Path(os.getenv("AUGMENT_DB_DIR", "./data")) / "response_cache.sqlite"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -24,21 +26,6 @@ def _lazy_semantic_cache():
             _SemanticCache = False
     return _SemanticCache if _SemanticCache is not False else None
 
-def _get_active_project():
-    """Get the active project name from projects.json"""
-    projects_config = BASE / "data" / "projects.json"
-
-    if projects_config.exists():
-        try:
-            with open(projects_config, "r", encoding="utf-8") as f:
-                projects = json.load(f)
-                for name, config in projects.items():
-                    if config.get("active", False):
-                        return name
-        except Exception:
-            pass
-
-    return None  # No active project (global cache)
 
 def _db():
     conn = sqlite3.connect(DB_PATH)
@@ -67,7 +54,7 @@ def make_key(model: str, messages: list, extra: dict, evidence_fingerprints: lis
         Tuple of (project, key_hash)
     """
     if project == "auto":
-        project = _get_active_project()
+        project = resolve_auto_project()
 
     # Use empty string for global cache
     project = project or ""
@@ -100,7 +87,7 @@ def get(k: str | tuple, project: str = None):
     else:
         # Old API: k is just the hash
         if project == "auto":
-            project = _get_active_project()
+            project = resolve_auto_project()
         project = project or ""
         key_hash = k
 
@@ -132,7 +119,7 @@ def set(k: str | tuple, v, ttl_sec: int = 3600, project: str = None):
     else:
         # Old API: k is just the hash
         if project == "auto":
-            project = _get_active_project()
+            project = resolve_auto_project()
         project = project or ""
         key_hash = k
 
@@ -151,7 +138,7 @@ def clear(project: str = None):
         project: Project name (None for global, "auto" for active project, "all" for all projects)
     """
     if project == "auto":
-        project = _get_active_project()
+        project = resolve_auto_project()
 
     with _db() as conn:
         if project == "all":
@@ -193,7 +180,7 @@ def semantic_get(query: str, project: str = "auto", similarity_threshold: float 
         return None
 
     if project == "auto":
-        project = _get_active_project()
+        project = resolve_auto_project()
 
     try:
         cache = SemanticCache(project=project, similarity_threshold=similarity_threshold)
@@ -217,7 +204,7 @@ def semantic_set(query: str, value, ttl_sec: int = 3600, project: str = "auto"):
         return
 
     if project == "auto":
-        project = _get_active_project()
+        project = resolve_auto_project()
 
     try:
         cache = SemanticCache(project=project)

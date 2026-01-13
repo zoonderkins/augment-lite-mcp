@@ -47,9 +47,13 @@ def _lazy_imports():
     
     return _faiss, _SentenceTransformer
 
+import sys
 BASE = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE))
 DATA_DIR = Path(os.getenv("AUGMENT_DB_DIR", BASE / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+from utils.project_utils import resolve_auto_project
 
 # Default embedding model (same as vector search)
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384 dimensions
@@ -319,23 +323,7 @@ def get_semantic_cache(project: str = "auto", **kwargs) -> SemanticCache:
         SemanticCache instance
     """
     if project == "auto":
-        project = _get_active_project()
-    
-    return SemanticCache(project=project, **kwargs)
+        project = resolve_auto_project()
 
-def _get_active_project() -> Optional[str]:
-    """Get the active project name from projects.json"""
-    projects_config = DATA_DIR / "projects.json"
-    
-    if projects_config.exists():
-        try:
-            with open(projects_config, "r", encoding="utf-8") as f:
-                projects = json.load(f)
-                for name, config in projects.items():
-                    if config.get("active", False):
-                        return name
-        except Exception:
-            pass
-    
-    return None
+    return SemanticCache(project=project, **kwargs)
 

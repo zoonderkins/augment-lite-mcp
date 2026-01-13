@@ -644,7 +644,7 @@ install_web_ui_deps() {
 
 show_menu() {
     clear
-    print_header "augment-lite-mcp 管理工具 v1.3.0"
+    print_header "augment-lite-mcp 管理工具 v1.3.1"
     echo ""
     echo "專案管理："
     echo "  1) 列出所有專案"

@@ -5,6 +5,19 @@ All notable changes to augment-lite MCP server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-01-14
+
+### 🔧 Bug Fixes
+- **Fixed `resolve_auto_project()` inconsistency**: `project_status` now correctly reports memory keys count
+  - Root cause: Multiple modules had duplicate `_get_active_project()` implementations that only checked `active=True`
+  - Fixed: All modules now use unified `resolve_auto_project()` with smart directory matching
+  - Affected files: `cache.py`, `semantic_cache.py`, `retrieval/search.py`, `retrieval/vector_search.py`, `retrieval/build_vector_index.py`, `utils/project_utils.py`
+
+### 📚 Documentation
+- Updated README roadmap with v1.4.0/v1.5.0 plans (modify symbol tools, LSP bridge)
+
+---
+
 ## [1.3.0] - 2025-01-14
 
 ### 🔧 Bug Fixes

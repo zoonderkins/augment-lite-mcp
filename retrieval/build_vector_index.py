@@ -25,7 +25,8 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
 
-from retrieval.vector_search import VectorSearchEngine, _get_active_project
+from retrieval.vector_search import VectorSearchEngine
+from utils.project_utils import resolve_auto_project
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,7 +109,7 @@ def main():
         project = args.project_name
     else:
         # Use active project
-        project = _get_active_project()
+        project = resolve_auto_project()
         if project is None:
             logger.warning("No active project found. Building global index.")
 

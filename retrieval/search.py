@@ -8,6 +8,8 @@ from typing import List, Dict, Optional
 
 sys.path.insert(0, str(BASE))
 
+from utils.project_utils import resolve_auto_project
+
 try:
     from rank_bm25 import BM25Okapi
 except Exception:
@@ -69,21 +71,6 @@ def _load_chunks(path=None):
 def _tokenize(s: str):
     return re.findall(r"[\w#@/\.\-]+", s.lower())
 
-def _get_active_project() -> Optional[str]:
-    """Get the active project name from projects.json"""
-    projects_config = BASE / "data" / "projects.json"
-
-    if projects_config.exists():
-        try:
-            with open(projects_config, "r", encoding="utf-8") as f:
-                projects = json.load(f)
-                for name, config in projects.items():
-                    if config.get("active", False):
-                        return name
-        except Exception:
-            pass
-
-    return None
 
 def bm25_search(query: str, k: int = 8) -> List[Dict]:
     """
@@ -144,7 +131,7 @@ def vector_search(query: str, k: int = 8, project: str = "auto") -> List[Dict]:
         return []
 
     if project == "auto":
-        project = _get_active_project()
+        project = resolve_auto_project()
 
     try:
         engine = VectorSearchEngine(project=project)

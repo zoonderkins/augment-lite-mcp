@@ -2,7 +2,7 @@
 
 > **Zero-Maintenance AI Code Assistant** - Local-first, cost-effective, privacy-safe
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
+[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.1+-green.svg)](https://github.com/anthropics/mcp)
@@ -639,14 +639,32 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 | 方案 | 功能 | 狀態 |
 |------|------|------|
 | **Tree-sitter** | AST 結構解析 (12 語言) | ✅ v1.3.0 已實現 |
-| **LSP** | 完整語義分析 | 🚧 計劃中 |
+| **修改型 Symbol 工具** | rename, edit_symbol_body | 🚧 v1.4.0 計劃中 |
+| **LSP Bridge** | 完整語義分析 | 🚧 v1.5.0 計劃中 |
 | **Auggie MCP** | 外部語義引擎 | 🚧 可選整合 |
 
-- [x] **Tree-sitter 整合** (v1.3.0): 12 語言 AST 解析
+**已完成 (v1.3.0)**:
+- [x] **Tree-sitter 整合**: 12 語言 AST 解析
   - Python, JavaScript, TypeScript, Go, Rust, Bash
   - JSON, YAML, HTML, CSS, HCL (Terraform), TOML
-- [ ] **LSP 支援**: 完整語義分析（rename, diagnostics, code actions）
-- [ ] **Auggie MCP 整合**: 可選語義引擎，節省 token
+- [x] **AST-based References**: `code.references` 使用 Tree-sitter 精準定位
+
+**v1.4.0 計劃 (P85)**:
+- [ ] **修改型 Symbol 工具** (Serena 核心差距)
+  - `code.rename_symbol` - Scope-aware 安全重命名
+  - `code.edit_symbol_body` - 精準替換 symbol 內容
+  - `code.insert_before_symbol` / `code.insert_after_symbol`
+  - 初期方案：AST-based Python-only 版本
+
+**v1.5.0 計劃 (P80)**:
+- [ ] **LSP → MCP Bridge**: 完整語義分析
+  - rename (跨文件安全重構)
+  - diagnostics (lint/errors)
+  - code actions
+  - 方案：整合 mcp-language-server 或自建 LSP client wrapper
+
+**研究中 (P70)**:
+- [ ] **Auggie MCP 深度整合**: 評估可否作為 LSP 替代
   - 安裝: `npm install -g @augmentcode/auggie@latest && auggie login`
   - 配置: `claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie","args":["--mcp"]}'`
 
