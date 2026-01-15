@@ -116,7 +116,11 @@ def create_execution_plan(
         "execution_hint": (
             "Execute steps 1-{} in order. Store results from each step. "
             "In the final synthesize step, combine all stored results to generate answer."
-        ).format(step_num - 1)
+        ).format(step_num - 1),
+        "auto_rebuild_hint": (
+            "If auggie returns files that rag_search misses (>50% difference), "
+            "call mcp__augment-lite__index_rebuild(project='auto') before synthesize step."
+        )
     }
 
 

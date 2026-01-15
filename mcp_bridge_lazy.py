@@ -1476,11 +1476,15 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
 
             try:
                 # Run in MCP server directory context
-                subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(BASE))
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(BASE))
             except subprocess.CalledProcessError as e:
                 return {
                     "ok": False,
-                    "error": f"Failed to rebuild BM25 index: {e}"
+                    "error": f"Failed to rebuild BM25 index: {e}",
+                    "stderr": e.stderr if e.stderr else "",
+                    "stdout": e.stdout if e.stdout else "",
+                    "cmd": " ".join(cmd),
+                    "hint": "Check if duckdb is installed in the Python environment"
                 }
 
         # Rebuild vector index
