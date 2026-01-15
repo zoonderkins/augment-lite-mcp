@@ -1684,5 +1684,14 @@ async def amain():
         )
         await server.run(read, write, init_options)
 
+def _clear_pycache():
+    """Clear __pycache__ directories on startup to avoid stale bytecode."""
+    import shutil
+    base = Path(__file__).parent
+    for pycache in base.rglob("__pycache__"):
+        if ".venv" not in str(pycache):
+            shutil.rmtree(pycache, ignore_errors=True)
+
 if __name__ == "__main__":
+    _clear_pycache()
     asyncio.run(amain())
