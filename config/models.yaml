@@ -6,14 +6,15 @@ defaults:
 
 providers:
   # ============================================================
-  # GLM-4.7 原厂 (智谱 - Anthropic 格式)
+  # GLM-4.7 原厂 (智谱 - OpenAI 兼容格式)
   # ============================================================
-  # 直连原厂 API，使用 Anthropic 格式
+  # Z.AI Coding Plan endpoint (OpenAI-compatible)
   # 需设置: GLM_API_KEY (从 z.ai 获取)
+  # Endpoint: POST /chat/completions
   glm-4.7:
-    base_url: "https://api.z.ai/api/anthropic"
+    base_url: "https://api.z.ai/api/coding/paas/v4"
     api_key_env: "GLM_API_KEY"
-    type: "anthropic"
+    type: "openai-compatible"
     model_id: "GLM-4.7"
 
   # ============================================================
@@ -28,14 +29,15 @@ providers:
     model_id_env: "GLM_LOCAL_MODEL_ID"
 
   # ============================================================
-  # MiniMax-M2.1 原厂 (Anthropic 格式)
+  # MiniMax-M2.1 原厂 (OpenAI 兼容格式)
   # ============================================================
-  # 直连原厂 API，使用 Anthropic 格式
+  # 直连原厂 API，使用 OpenAI Chat Completions 格式
   # 需设置: MINIMAX_API_KEY (从 minimax.io 获取)
+  # Endpoint: POST /v1/chat/completions
   minimax-m2.1:
-    base_url: "https://api.minimax.io/anthropic"
+    base_url: "https://api.minimax.io/v1"
     api_key_env: "MINIMAX_API_KEY"
-    type: "anthropic"
+    type: "openai-compatible"
     model_id: "MiniMax-M2.1"
 
   # ============================================================

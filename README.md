@@ -2,7 +2,7 @@
 
 > **Zero-Maintenance AI Code Assistant** - Local-first, cost-effective, privacy-safe
 
-[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
+[![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.1+-green.svg)](https://github.com/anthropics/mcp)
@@ -158,11 +158,12 @@ cd web_ui && ./start.sh  # http://localhost:8080
 - ✅ 現代化深色主題
 
 ### 7. 🤖 MCP Protocol Compliance
-**28 個 MCP Tools**
+**31 個 MCP Tools**
 
 | 類別 | Tools |
 |------|-------|
-| **RAG** | `rag.search`, `answer.generate` |
+| **RAG** | `rag.search`, `answer.generate`, `answer.accumulated`, `answer.unified` |
+| **Dual Search** | `dual.search` |
 | **Project** | `project.init`, `project.status` |
 | **Index** | `index.status`, `index.rebuild` |
 | **Cache** | `cache.clear`, `cache.status` |
@@ -171,6 +172,33 @@ cd web_ui && ./start.sh  # http://localhost:8080
 | **Code** | `code.symbols`, `code.find_symbol`, `code.references` |
 | **Search** | `search.pattern` |
 | **File** | `file.read`, `file.list`, `file.find` |
+
+### 8. 🔄 Unified Search (v1.3.2+)
+**auggie + augment-lite 多引擎編排**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│               answer.unified (指揮官工具)                    │
+│                                                              │
+│  1. [minimax-m2.1] 分解查詢 → sub_queries                   │
+│  2. 返回執行計劃給 Claude                                    │
+└──────────────────────┬──────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Claude 按計劃自動執行                           │
+│                                                              │
+│  Step 1: auggie-mcp → semantic_results                      │
+│  Step 2: rag.search [minimax re-rank] → rag_results         │
+│  Step 3-N: rag.search (sub-queries) → more_results          │
+│  Step N+1: 合併 evidence → [GLM-4.7] → final_answer         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Tool | 觸發時機 | 模型調用 |
+|------|----------|----------|
+| `answer.accumulated` | 複雜問題、之前返回"不知道" | minimax (分解) → GLM-4.7 (答案) |
+| `answer.unified` | 需要 auggie + augment-lite 雙引擎 | minimax (分解) + auggie + GLM-4.7 |
+| `dual.search` | 僅需搜索結果，不需答案生成 | minimax (re-rank) |
 
 ---
 
@@ -396,6 +424,9 @@ rag.search  # 自動處理 init + index
 |------|------|------|
 | `rag.search` | BM25 + 向量混合搜索 | 搜索代碼片段 |
 | `answer.generate` | 基於檢索結果生成答案 | 帶引用的回答 |
+| `answer.accumulated` | 多輪累積 evidence 問答 | 複雜問題、避免"不知道" |
+| `answer.unified` | auggie + augment-lite 編排 | 返回執行計劃讓 Claude 按序調用 |
+| `dual.search` | 雙引擎搜索 | 本地 RAG + auggie hint |
 | `index.rebuild` | 重建專案索引 | 索引損壞時使用 |
 | `index.status` | 檢查索引狀態 | 查看索引健康度 |
 
@@ -560,7 +591,7 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 └─────────────────┬────────────────────────────┘
                   │ MCP Protocol
 ┌─────────────────▼────────────────────────────┐
-│         mcp_bridge_lazy.py (28 Tools)        │
+│         mcp_bridge_lazy.py (31 Tools)        │
 └─────────────────┬────────────────────────────┘
                   │
      ┌────────────┼────────────┐

@@ -27,6 +27,8 @@ from mcp.server.lowlevel import NotificationOptions
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 
 BASE = Path(__file__).resolve().parent
+DATA_DIR = Path(os.getenv("AUGMENT_DB_DIR", BASE / "data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # DO NOT change working directory - respect caller's CWD
 # os.chdir(BASE)  # Removed: This breaks Claude Code's working directory context
@@ -52,6 +54,45 @@ rag.search will automatically:
 3. Execute search
 
 NO MANUAL project.init NEEDED for basic usage!
+
+═══════════════════════════════════════════════════════════════
+UNIFIED SEARCH (auggie + augment-lite orchestration)
+═══════════════════════════════════════════════════════════════
+
+answer.unified returns execution plan for multi-MCP search:
+
+Usage:
+  answer.unified query="Analyze architecture, DB, metrics..."
+
+Returns execution plan:
+  Step 1: auggie-mcp semantic search
+  Step 2: augment-lite RAG search
+  Step 3-N: Sub-query searches
+  Step N+1: Synthesize with route model (GLM-4.7/MiniMax)
+
+Claude executes steps and merges results automatically.
+
+Models used:
+  • minimax-m2.1: Query decomposition + RAG re-ranking
+  • route param: Final answer (default: reason-large = GLM-4.7)
+
+═══════════════════════════════════════════════════════════════
+ANSWER TOOL SELECTION GUIDE
+═══════════════════════════════════════════════════════════════
+
+| Scenario | Tool | Why |
+|----------|------|-----|
+| Simple question | answer.generate | Single search, fast |
+| Complex multi-aspect | answer.accumulated | Multi-round evidence accumulation |
+| Previous "不知道" | answer.accumulated | Re-search with sub-queries |
+| Need auggie + local | answer.unified | Returns plan for dual-MCP |
+| Search only (no answer) | dual.search | Returns hits + auggie hint |
+
+TRIGGER KEYWORDS:
+• "analyze architecture, database, metrics..." → answer.accumulated
+• "comprehensive analysis" → answer.accumulated
+• "search both auggie and local" → answer.unified
+• "返回不知道/incomplete" → retry with answer.accumulated
 
 ═══════════════════════════════════════════════════════════════
 PROACTIVE MEMORY PATTERNS (Serena-style)
@@ -211,6 +252,33 @@ RETURNS: {text, source, score} - source includes file:line for easy navigation""
         # outputSchema omitted for token efficiency - Claude understands JSON responses naturally
     ),
     Tool(
+        name="dual.search",
+        description="""Combined search across augment-lite + auggie-mcp engines.
+
+WHEN TO USE:
+• Need comprehensive code search from multiple sources
+• Want both local (BM25+vector) and semantic (auggie) results
+• Following CLAUDE.md Phase 1 dual-MCP workflow
+
+INTEGRATION:
+• Always runs augment-lite locally
+• Calls auggie-mcp HTTP if AUGGIE_API_URL is configured
+• Returns auggie_hint if manual orchestration needed
+
+RETURNS: {hits, sources, auggie_available, auggie_hint}""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "k": {"type": "integer", "default": 8},
+                "use_subagent": {"type": "boolean", "default": True},
+                "use_iterative": {"type": "boolean", "default": False},
+                "include_auggie": {"type": "boolean", "default": True, "description": "Try to include auggie results"}
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
         name="answer.generate",
         description="""Answer questions with citations from codebase.
 
@@ -237,6 +305,79 @@ AUTO-SUGGEST: Use this after rag.search when user needs explanation, not just co
             "required": ["query"],
         },
         # outputSchema omitted for token efficiency
+    ),
+    Tool(
+        name="answer.accumulated",
+        description="""Answer complex questions with multi-aspect evidence accumulation.
+
+WHEN TO USE:
+• Complex queries covering multiple aspects (architecture, database, metrics, etc.)
+• Previous answer.generate returned "不知道" for some aspects
+• Need comprehensive coverage across different code areas
+
+WORKFLOW:
+1. Decompose query into 3-5 sub-queries (uses minimax for speed)
+2. Execute targeted search for each sub-query
+3. Accumulate all evidence (deduplicated)
+4. Generate comprehensive answer with full evidence
+
+ADVANTAGE: Solves incomplete index problem by searching multiple aspects separately""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Complex question covering multiple aspects"},
+                "sub_queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: pre-defined sub-queries (auto-generated if not provided)"
+                },
+                "k_per_query": {"type": "integer", "default": 5, "description": "Results per sub-query"},
+                "route": {
+                    "type": "string",
+                    "default": "reason-large",
+                    "enum": ["auto", "small-fast", "reason-large", "general", "big-mid", "long-context"],
+                    "description": "Model route for final answer generation"
+                },
+                "temperature": {"type": "number", "default": 0.2},
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="answer.unified",
+        description="""Orchestrate multi-MCP search combining auggie + augment-lite.
+
+WHEN TO USE:
+• Need comprehensive results from BOTH semantic (auggie) and RAG (augment-lite) engines
+• Complex analysis requiring multiple search rounds
+• Following CLAUDE.md Phase 1 dual-MCP workflow
+
+RETURNS: Execution plan with steps for Claude to follow:
+1. Call auggie-mcp for semantic search
+2. Call augment-lite RAG for local search
+3. Execute targeted sub-queries
+4. Synthesize final answer with merged evidence
+
+Claude should execute the returned steps in order and merge results.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Complex question for multi-engine search"},
+                "sub_queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: pre-defined sub-queries"
+                },
+                "include_auggie": {"type": "boolean", "default": True, "description": "Include auggie-mcp in plan"},
+                "route": {
+                    "type": "string",
+                    "default": "reason-large",
+                    "enum": ["auto", "small-fast", "reason-large", "general", "big-mid", "long-context"],
+                    "description": "Model route for final synthesis"
+                }
+            },
+            "required": ["query"],
+        },
     ),
     Tool(
         name="memory.get",
@@ -673,7 +814,7 @@ async def _list_resources() -> list[dict[str, Any]]:
         projects = get_all_projects()
         for proj_name, proj_info in projects.items():
             root = proj_info.get("root", "")
-            chunks_file = BASE / "data" / f"chunks_{proj_name}.jsonl"
+            chunks_file = DATA_DIR / f"chunks_{proj_name}.jsonl"
             chunks_count = 0
             if chunks_file.exists():
                 with open(chunks_file) as f:
@@ -758,7 +899,7 @@ def _lazy_engine():
     """Import heavy deps only when needed."""
     # 全部延後到這裡才 import（避免啟動逾時）
     from retrieval.search import hybrid_search, evidence_fingerprints_for_hits
-    from providers.registry import get_provider, openai_chat  # 會讀 config/models.yaml（已改成絕對路徑）
+    from providers.registry import get_provider, chat  # 會讀 config/models.yaml（已改成絕對路徑）
     from router import pick_route, get_route_config
     from cache import make_key, get as cache_get, set as cache_set
     from guardrails.abstain import should_abstain
@@ -780,7 +921,7 @@ def _lazy_engine():
         "should_use_iterative_search": should_use_iterative_search,
         "evidence_fingerprints_for_hits": evidence_fingerprints_for_hits,
         "get_provider": get_provider,
-        "openai_chat": openai_chat,
+        "chat": chat,
         "pick_route": pick_route,
         "get_route_config": get_route_config,
         "make_key": make_key,
@@ -891,6 +1032,23 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
             hits = E["hybrid_search"](q, k=k, project="auto")
 
         return {"ok": True, "hits": hits}
+
+    if name == "dual.search":
+        from retrieval.dual_search import dual_search
+        q = str(args.get("query", ""))
+        k = int(args.get("k", 8))
+        use_subagent = bool(args.get("use_subagent", True))
+        use_iterative = bool(args.get("use_iterative", False))
+        include_auggie = bool(args.get("include_auggie", True))
+        result = dual_search(
+            query=q,
+            k=k,
+            use_subagent=use_subagent,
+            use_iterative=use_iterative,
+            include_auggie=include_auggie,
+            project="auto"
+        )
+        return result
 
     if name == "memory.get":
         key = str(args.get("key", ""))
@@ -1045,10 +1203,41 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
             return {"ok": True, **cached, "cached": True}
 
         provider = E["get_provider"](model_alias)
-        answer = E["openai_chat"](provider, messages, temperature=temperature, seed=7, max_output_tokens=max_output_tokens)
+        answer = E["chat"](provider, messages, temperature=temperature, seed=7, max_output_tokens=max_output_tokens)
         payload = {"answer": answer, "citations": [h["source"] for h in hits]}
         E["cache_set"](key, payload, ttl_sec=7200)
         return {"ok": True, **payload, "cached": False}
+
+    if name == "answer.accumulated":
+        from retrieval.accumulated_answer import generate_accumulated_answer
+        query = str(args.get("query", ""))
+        sub_queries = args.get("sub_queries")  # Optional list
+        k_per_query = int(args.get("k_per_query", 5))
+        route = str(args.get("route", "reason-large"))
+        temperature = float(args.get("temperature", 0.2))
+        result = generate_accumulated_answer(
+            query=query,
+            sub_queries=sub_queries,
+            k_per_query=k_per_query,
+            route=route,
+            temperature=temperature,
+            project="auto"
+        )
+        return result
+
+    if name == "answer.unified":
+        from retrieval.unified_orchestrator import create_execution_plan
+        query = str(args.get("query", ""))
+        sub_queries = args.get("sub_queries")  # Optional list
+        include_auggie = bool(args.get("include_auggie", True))
+        route = str(args.get("route", "reason-large"))
+        plan = create_execution_plan(
+            query=query,
+            sub_queries=sub_queries,
+            include_auggie=include_auggie,
+            route=route
+        )
+        return plan
 
     # Project Management Tools
     if name == "project.status":
@@ -1102,12 +1291,16 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
             build_script = BASE / "retrieval" / "build_index.py"
             projects = get_project_status(project)
 
+            # Use DATA_DIR for consistent storage location
+            db_path = DATA_DIR / f"corpus_{project}.duckdb"
+            chunks_path = DATA_DIR / f"chunks_{project}.jsonl"
+
             cmd = [
                 sys.executable,
                 str(build_script),
                 "--root", cwd,
-                "--db", f"data/corpus_{project}.duckdb",
-                "--chunks", f"data/chunks_{project}.jsonl",
+                "--db", str(db_path),
+                "--chunks", str(chunks_path),
             ]
 
             try:
@@ -1264,12 +1457,17 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
         # Rebuild BM25 index
         if not vector_only:
             build_script = BASE / "retrieval" / "build_index.py"
+
+            # Use DATA_DIR for consistent storage location
+            db_path = DATA_DIR / f"corpus_{project}.duckdb"
+            chunks_path = DATA_DIR / f"chunks_{project}.jsonl"
+
             cmd = [
                 sys.executable,
                 str(build_script),
                 "--root", root,
-                "--db", f"data/corpus_{project}.duckdb",
-                "--chunks", f"data/chunks_{project}.jsonl",
+                "--db", str(db_path),
+                "--chunks", str(chunks_path),
             ]
 
             try:
@@ -1478,7 +1676,7 @@ async def amain():
     async with stdio_server() as (read, write):
         init_options = InitializationOptions(
             server_name="augment-lite",
-            server_version="1.3.1",
+            server_version="1.3.2",
             capabilities=server.get_capabilities(
                 notification_options=NotificationOptions(),
                 experimental_capabilities={},
