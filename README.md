@@ -200,6 +200,24 @@ cd web_ui && ./start.sh  # http://localhost:8080
 | `answer.unified` | 需要 auggie + augment-lite 雙引擎 | minimax (分解) + auggie + GLM-4.7 |
 | `dual.search` | 僅需搜索結果，不需答案生成 | minimax (re-rank) |
 
+**Auto-Rebuild 功能 (v1.3.2+)**
+
+當 `dual.search` 偵測到 auggie 返回的檔案 >50% 不在 augment-lite 結果中，自動觸發 `incremental_index` 重建並重新搜索：
+
+```json
+{
+  "index_rebuilt": true,
+  "rebuild_info": {
+    "files_updated": 15,
+    "reason": "auggie found files missing from augment-lite index"
+  }
+}
+```
+
+| 參數 | 預設 | 說明 |
+|------|------|------|
+| `auto_rebuild` | `true` | 自動重建過時索引 |
+
 ---
 
 ## 📦 快速開始

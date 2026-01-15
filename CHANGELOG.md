@@ -12,13 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `answer.accumulated`: Multi-round evidence accumulation with automatic query decomposition
   - `answer.unified`: Execution plan generator for auggie-mcp + augment-lite coordination
   - `dual.search`: Combined search wrapper with auggie invocation hint
+- **Auto-Rebuild Stale Index**: `dual.search` auto-detects when auggie finds files missing from augment-lite (>50%), triggers `incremental_index` rebuild and re-searches
+  - New parameter: `auto_rebuild` (default: true)
+  - Returns: `index_rebuilt`, `rebuild_info` fields
 
 ### 🔧 Bug Fixes
 - **Fixed MiniMax config**: Changed to OpenAI-compatible format (`type: "openai-compatible"`)
 - **Fixed cache import**: Corrected `cache_get/cache_set` to `get/set` in accumulated_answer.py
+- **Fixed __pycache__ stale bytecode**: Auto-clear `__pycache__` on MCP server startup (excludes `.venv`)
+- **Fixed index.rebuild subprocess**: Use `.venv/bin/python` instead of system Python to ensure duckdb/faiss available
+- **Improved index.rebuild errors**: Return stderr/stdout/cmd in error response for debugging
 
 ### 📚 Documentation
-- Added Section 8 (Unified Search) to README
+- Added Section 8 (Unified Search) to README with Auto-Rebuild documentation
 - Updated SERVER_INSTRUCTIONS with tool selection guide
 - Total tools: 31
 
