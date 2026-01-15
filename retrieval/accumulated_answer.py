@@ -184,7 +184,7 @@ def generate_accumulated_answer(
     from providers.registry import get_provider, chat
     from router import get_route_config
     from tokenizer import estimate_tokens_from_messages
-    from cache import make_key, cache_get, cache_set
+    from cache import make_key, get as cache_get, set as cache_set
     from guardrails.abstain import should_abstain, get_abstain_reason
 
     # 1. Accumulated search
