@@ -1,9 +1,9 @@
 # ============================================================
 # augment-lite-mcp Makefile
-# Version: 1.3.1
+# Version: 1.3.2
 # ============================================================
 
-VERSION := 1.3.1
+VERSION := 1.3.2
 
 .PHONY: help venv install install-lock install-vector index add-project list-projects \
         activate-project rebuild-project build-vector-index rebuild-vector-index \

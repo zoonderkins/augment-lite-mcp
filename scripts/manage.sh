@@ -16,6 +16,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# 資料目錄（支援 AUGMENT_DB_DIR 環境變數）
+DATA_DIR="${AUGMENT_DB_DIR:-${PROJECT_ROOT}/data}"
+
 # ============================================================
 # 檢查並初始化虛擬環境
 # ============================================================
@@ -387,100 +390,100 @@ clean_data() {
     print_header "清理資料"
     echo ""
 
-    echo "這將刪除以下資料："
-    echo "  - data/corpus*.duckdb (所有索引資料庫)"
-    echo "  - data/chunks*.jsonl (所有分塊資料)"
-    echo "  - data/index_state*.json (增量索引狀態) [v0.7.0 新增]"
-    echo "  - data/vector_index*.faiss (所有向量索引)"
-    echo "  - data/vector_chunks*.pkl (所有向量 chunks)"
-    echo "  - data/semantic_cache*.faiss (所有語義快取索引)"
-    echo "  - data/semantic_cache_entries*.pkl (所有語義快取項目)"
-    echo "  - data/response_cache.sqlite (回應快取)"
-    echo "  - data/memory.sqlite (長期記憶)"
-    echo "  - data/projects.json (專案配置)"
+    echo "這將刪除以下資料 (位於 $DATA_DIR)："
+    echo "  - corpus*.duckdb (所有索引資料庫)"
+    echo "  - chunks*.jsonl (所有分塊資料)"
+    echo "  - index_state*.json (增量索引狀態) [v0.7.0 新增]"
+    echo "  - vector_index*.faiss (所有向量索引)"
+    echo "  - vector_chunks*.pkl (所有向量 chunks)"
+    echo "  - semantic_cache*.faiss (所有語義快取索引)"
+    echo "  - semantic_cache_entries*.pkl (所有語義快取項目)"
+    echo "  - response_cache.sqlite (回應快取)"
+    echo "  - memory.sqlite (長期記憶)"
+    echo "  - projects.json (專案配置)"
     echo ""
 
     print_warning "這是危險操作！所有資料將被刪除！"
     echo ""
-    
+
     read -p "確定要繼續嗎？請輸入 'DELETE' 確認: " confirm
-    
+
     if [ "$confirm" = "DELETE" ]; then
         echo ""
         print_info "開始清理..."
-        
+
         # 刪除符號連結（如果存在）
-        if [ -L "data/corpus.duckdb" ]; then
-            rm -f data/corpus.duckdb
+        if [ -L "$DATA_DIR/corpus.duckdb" ]; then
+            rm -f "$DATA_DIR/corpus.duckdb"
             print_success "已刪除 corpus.duckdb 符號連結"
         fi
-        if [ -L "data/chunks.jsonl" ]; then
-            rm -f data/chunks.jsonl
+        if [ -L "$DATA_DIR/chunks.jsonl" ]; then
+            rm -f "$DATA_DIR/chunks.jsonl"
             print_success "已刪除 chunks.jsonl 符號連結"
         fi
 
         # 刪除索引檔案
-        rm -f data/corpus*.duckdb
-        rm -f data/chunks*.jsonl
+        rm -f "$DATA_DIR"/corpus*.duckdb
+        rm -f "$DATA_DIR"/chunks*.jsonl
         print_success "已刪除索引檔案"
 
         # 刪除增量索引狀態 (v0.7.0)
-        rm -f data/index_state*.json
+        rm -f "$DATA_DIR"/index_state*.json
         print_success "已刪除增量索引狀態"
 
         # 刪除向量索引
-        rm -f data/vector_index*.faiss
-        rm -f data/vector_chunks*.pkl
+        rm -f "$DATA_DIR"/vector_index*.faiss
+        rm -f "$DATA_DIR"/vector_chunks*.pkl
         print_success "已刪除向量索引"
 
         # 刪除語義快取
-        rm -f data/semantic_cache*.faiss
-        rm -f data/semantic_cache_entries*.pkl
+        rm -f "$DATA_DIR"/semantic_cache*.faiss
+        rm -f "$DATA_DIR"/semantic_cache_entries*.pkl
         print_success "已刪除語義快取"
 
         # 刪除快取
-        rm -f data/response_cache.sqlite
+        rm -f "$DATA_DIR/response_cache.sqlite"
         print_success "已刪除回應快取"
 
         # 刪除記憶
-        rm -f data/memory.sqlite
+        rm -f "$DATA_DIR/memory.sqlite"
         print_success "已刪除長期記憶"
 
         # 刪除專案配置
-        rm -f data/projects.json
+        rm -f "$DATA_DIR/projects.json"
         print_success "已刪除專案配置"
-        
+
         echo ""
         print_success "資料清理完成"
     else
         print_info "取消清理"
     fi
-    
+
     echo ""
 }
 
 backup_data() {
     print_header "備份資料"
     echo ""
-    
+
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_dir="backups/backup_${timestamp}"
-    
+
     mkdir -p "$backup_dir"
-    
+
     # 備份所有資料
-    if [ -d "data" ]; then
-        cp -r data "$backup_dir/"
-        print_success "已備份 data/ 到 $backup_dir/"
+    if [ -d "$DATA_DIR" ]; then
+        cp -r "$DATA_DIR" "$backup_dir/data"
+        print_success "已備份 $DATA_DIR 到 $backup_dir/data"
     fi
-    
+
     # 備份配置
     if [ -f "config/models.yaml" ]; then
         mkdir -p "$backup_dir/config"
         cp config/models.yaml "$backup_dir/config/"
         print_success "已備份 config/models.yaml"
     fi
-    
+
     echo ""
     print_success "備份完成: $backup_dir"
     echo ""
@@ -493,60 +496,63 @@ backup_data() {
 show_status() {
     print_header "系統狀態"
     echo ""
-    
+
+    # 顯示資料目錄位置
+    print_info "資料目錄: $DATA_DIR"
+
     # 檢查 Python 環境
     if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
         print_success "Python 虛擬環境: 已安裝"
     else
         print_warning "Python 虛擬環境: 未安裝"
     fi
-    
+
     # 檢查資料目錄
-    if [ -d "data" ]; then
-        local db_count=$(ls -1 data/corpus*.duckdb 2>/dev/null | wc -l)
-        local chunks_count=$(ls -1 data/chunks*.jsonl 2>/dev/null | wc -l)
+    if [ -d "$DATA_DIR" ]; then
+        local db_count=$(ls -1 "$DATA_DIR"/corpus*.duckdb 2>/dev/null | wc -l)
+        local chunks_count=$(ls -1 "$DATA_DIR"/chunks*.jsonl 2>/dev/null | wc -l)
         print_info "索引資料庫: $db_count 個"
         print_info "分塊資料: $chunks_count 個"
     else
         print_warning "資料目錄: 不存在"
     fi
-    
+
     # 檢查向量索引
-    local vector_count=$(ls -1 data/vector_index*.faiss 2>/dev/null | wc -l)
+    local vector_count=$(ls -1 "$DATA_DIR"/vector_index*.faiss 2>/dev/null | wc -l)
     if [ "$vector_count" -gt 0 ]; then
-        local vector_total_size=$(du -ch data/vector_index*.faiss data/vector_chunks*.pkl 2>/dev/null | grep total | cut -f1)
+        local vector_total_size=$(du -ch "$DATA_DIR"/vector_index*.faiss "$DATA_DIR"/vector_chunks*.pkl 2>/dev/null | grep total | cut -f1)
         print_info "向量索引: $vector_count 個 (總大小: $vector_total_size)"
     else
         print_info "向量索引: 0 個"
     fi
 
     # 檢查語義快取
-    local semantic_cache_count=$(ls -1 data/semantic_cache*.faiss 2>/dev/null | wc -l)
+    local semantic_cache_count=$(ls -1 "$DATA_DIR"/semantic_cache*.faiss 2>/dev/null | wc -l)
     if [ "$semantic_cache_count" -gt 0 ]; then
-        local semantic_total_size=$(du -ch data/semantic_cache*.faiss data/semantic_cache_entries*.pkl 2>/dev/null | grep total | cut -f1)
+        local semantic_total_size=$(du -ch "$DATA_DIR"/semantic_cache*.faiss "$DATA_DIR"/semantic_cache_entries*.pkl 2>/dev/null | grep total | cut -f1)
         print_info "語義快取: $semantic_cache_count 個 (總大小: $semantic_total_size)"
     else
         print_info "語義快取: 0 個"
     fi
 
     # 檢查快取
-    if [ -f "data/response_cache.sqlite" ]; then
-        local cache_size=$(du -h data/response_cache.sqlite | cut -f1)
+    if [ -f "$DATA_DIR/response_cache.sqlite" ]; then
+        local cache_size=$(du -h "$DATA_DIR/response_cache.sqlite" | cut -f1)
         print_info "回應快取: $cache_size"
     else
         print_info "回應快取: 不存在"
     fi
 
     # 檢查記憶
-    if [ -f "data/memory.sqlite" ]; then
-        local memory_size=$(du -h data/memory.sqlite | cut -f1)
+    if [ -f "$DATA_DIR/memory.sqlite" ]; then
+        local memory_size=$(du -h "$DATA_DIR/memory.sqlite" | cut -f1)
         print_info "長期記憶: $memory_size"
     else
         print_info "長期記憶: 不存在"
     fi
 
     # 檢查增量索引狀態 (v0.7.0)
-    local index_state_count=$(ls -1 data/index_state*.json 2>/dev/null | wc -l)
+    local index_state_count=$(ls -1 "$DATA_DIR"/index_state*.json 2>/dev/null | wc -l)
     if [ "$index_state_count" -gt 0 ]; then
         print_info "增量索引狀態: $index_state_count 個專案"
     else
@@ -644,7 +650,7 @@ install_web_ui_deps() {
 
 show_menu() {
     clear
-    print_header "augment-lite-mcp 管理工具 v1.3.1"
+    print_header "augment-lite-mcp 管理工具 v1.3.2"
     echo ""
     echo "專案管理："
     echo "  1) 列出所有專案"
