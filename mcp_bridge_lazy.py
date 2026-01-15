@@ -1466,8 +1466,12 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
             db_path = DATA_DIR / f"corpus_{project}.duckdb"
             chunks_path = DATA_DIR / f"chunks_{project}.jsonl"
 
+            # Prefer venv Python (has duckdb installed) over system Python
+            venv_python = BASE / ".venv" / "bin" / "python"
+            python_exe = str(venv_python) if venv_python.exists() else sys.executable
+
             cmd = [
-                sys.executable,
+                python_exe,
                 str(build_script),
                 "--root", root,
                 "--db", str(db_path),
@@ -1494,7 +1498,11 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
             import sentence_transformers
 
             build_vector_script = BASE / "retrieval" / "build_vector_index.py"
-            cmd = [sys.executable, str(build_vector_script), "--project", project]
+            # Reuse venv_python if defined, otherwise detect
+            if 'python_exe' not in locals():
+                venv_python = BASE / ".venv" / "bin" / "python"
+                python_exe = str(venv_python) if venv_python.exists() else sys.executable
+            cmd = [python_exe, str(build_vector_script), "--project", project]
 
             # Run in MCP server directory context
             result = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=str(BASE))
