@@ -264,8 +264,9 @@ INTEGRATION:
 • Always runs augment-lite locally
 • Calls auggie-mcp HTTP if AUGGIE_API_URL is configured
 • Returns auggie_hint if manual orchestration needed
+• Auto-rebuilds stale index when auggie finds missing files (v1.3.2+)
 
-RETURNS: {hits, sources, auggie_available, auggie_hint}""",
+RETURNS: {hits, sources, auggie_available, auggie_hint, index_rebuilt}""",
         inputSchema={
             "type": "object",
             "properties": {
@@ -273,7 +274,8 @@ RETURNS: {hits, sources, auggie_available, auggie_hint}""",
                 "k": {"type": "integer", "default": 8},
                 "use_subagent": {"type": "boolean", "default": True},
                 "use_iterative": {"type": "boolean", "default": False},
-                "include_auggie": {"type": "boolean", "default": True, "description": "Try to include auggie results"}
+                "include_auggie": {"type": "boolean", "default": True, "description": "Try to include auggie results"},
+                "auto_rebuild": {"type": "boolean", "default": True, "description": "Auto-rebuild index if stale (auggie finds files augment-lite missed)"}
             },
             "required": ["query"],
         },
@@ -1040,12 +1042,14 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
         use_subagent = bool(args.get("use_subagent", True))
         use_iterative = bool(args.get("use_iterative", False))
         include_auggie = bool(args.get("include_auggie", True))
+        auto_rebuild = bool(args.get("auto_rebuild", True))
         result = dual_search(
             query=q,
             k=k,
             use_subagent=use_subagent,
             use_iterative=use_iterative,
             include_auggie=include_auggie,
+            auto_rebuild=auto_rebuild,
             project="auto"
         )
         return result
