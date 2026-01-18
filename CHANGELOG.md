@@ -5,6 +5,30 @@ All notable changes to augment-lite MCP server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-01-18
+
+### ✨ New Features
+- **OpenRouter Embedding API**: Added `EmbeddingProvider` class supporting API embeddings via OpenRouter
+  - Primary: `qwen/qwen3-embedding-4b` (2560 dims)
+  - Fallback: Local `sentence-transformers/all-MiniLM-L6-v2` (384 dims)
+  - Config: `config/models.yaml` → `embedding` section
+- **CJK Tokenizer**: Added `_simple_tokenize()` for Chinese/Japanese/Korean document chunking
+- **Extended File Types**: Expanded to 70+ supported file extensions (CODE_EXTS + DOC_EXTS)
+
+### 🔧 Improvements
+- **TopK Over-fetch**: Increased from `k×2` to `k×3` for larger candidate pool
+- **Per-file Dedup**: Changed from limit=1 to limit=2 (better recall, less aggressive)
+- **Safe Source Parsing**: Regex `r":(?:chunk)?\d+$"` handles Windows paths, URLs safely
+- **Dimension Guard**: Fail-fast check with provider/model info in error messages
+- **Single-vector Shape**: Handle `(D,)` → `(1, D)` with ndim guard
+
+### 📚 Documentation
+- **Mermaid Diagrams**: Added system architecture and hybrid search flow diagrams
+- **Technical Parameters**: Updated table with k×3, per-file limit=2, 2560 dims
+- **File Types List**: Added collapsible section with 70+ supported extensions
+
+---
+
 ## [1.3.2] - 2026-01-16
 
 ### ✨ New Features
