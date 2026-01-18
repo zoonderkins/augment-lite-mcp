@@ -7,24 +7,26 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.1+-green.svg)](https://github.com/anthropics/mcp)
 
+**[中文文檔](README_ZH.md)**
+
 ---
 
 ## 🎯 What is augment-lite-mcp?
 
-augment-lite-mcp 是一個**零維護、本地優先**的 AI 代碼助手引擎，透過 MCP (Model Context Protocol) 整合到 Claude Code 等 AI 編程工具。
+augment-lite-mcp is a **zero-maintenance, local-first** AI code assistant engine that integrates with AI programming tools like Claude Code via MCP (Model Context Protocol).
 
-### 💡 核心價值
+### 💡 Core Value Proposition
 
 ```
-零維護搜索 + 本地隱私 + 低成本 AI = 理想的編程助手
+Zero-Maintenance Search + Local Privacy + Low-Cost AI = Ideal Programming Assistant
 ```
 
-- **🔥 Zero Maintenance**: 自動增量索引，無需手動重建
-- **🔒 Privacy First**: 代碼完全本地存儲（DuckDB + SQLite）
-- **💰 Cost Effective**: 本地 BM25+Vector 優先，LLM 僅用於精篩
-- **🎯 Hybrid Search**: BM25 關鍵字 + 向量語義雙重匹配
+- **🔥 Zero Maintenance**: Auto-incremental indexing, no manual rebuild required
+- **🔒 Privacy First**: Code stored entirely locally (DuckDB + SQLite)
+- **💰 Cost Effective**: Local BM25+Vector first, LLM only for final filtering
+- **🎯 Hybrid Search**: BM25 keywords + vector semantic dual matching
 
-### 🏗️ 系統架構
+### 🏗️ System Architecture
 
 ```mermaid
 flowchart LR
@@ -71,103 +73,103 @@ flowchart LR
 
 ---
 
-## ✨ 核心特性
+## ✨ Core Features
 
 ### 1. 🚀 Auto-Incremental Indexing
-**acemcp-inspired 零維護體驗**
+**acemcp-inspired Zero-Maintenance Experience**
 
 ```bash
-# 不需要手動 rebuild，一切自動完成
-./scripts/manage.sh add auto .  # 初次添加專案
+# No manual rebuild needed, everything happens automatically
+./scripts/manage.sh add auto .  # Initial project add
 
-# 之後無論如何修改代碼
-# 搜索時自動檢測變更並更新索引
+# After any code modifications
+# Changes are auto-detected and indexed on search
 ```
 
-- ✅ 自動檢測文件變更（mtime + MD5）
-- ✅ 只更新變更的文件（60x faster）
-- ✅ 完全透明，用戶無感知
+- ✅ Auto-detect file changes (mtime + MD5)
+- ✅ Only update changed files (60x faster)
+- ✅ Completely transparent, no user intervention
 
 ### 2. 🔍 Dual-Layer Retrieval
-**本地向量 + 遠端 LLM 智能過濾**
+**Local Vector + Remote LLM Smart Filtering**
 
 ```
-Layer 1: 向量嵌入 (OpenRouter API / 本地 fallback)
-  → BM25 + Vector 混合搜索 (k×3 over-fetch)
-  → ~50 個候選結果 → 同檔去重 → ~35 候選
-  → 模型: qwen/qwen3-embedding-4b (2560 dims, API)
-  → Fallback: all-MiniLM-L6-v2 (384 dims, 本地)
+Layer 1: Vector Embeddings (OpenRouter API / Local fallback)
+  → BM25 + Vector hybrid search (k×3 over-fetch)
+  → ~50 candidates → per-file dedup → ~35 candidates
+  → Model: qwen/qwen3-embedding-4b (2560 dims, API)
+  → Fallback: all-MiniLM-L6-v2 (384 dims, local)
 
-Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
-  → 語義理解 + Re-rank
-  → 最終 Top-K 高質量結果
-  → 使用 OpenAI 兼容格式 API
+Layer 2: GLM-4.7 / MiniMax-M2.1 LLM Smart Filtering
+  → Semantic understanding + Re-rank
+  → Final Top-K high-quality results
+  → Uses OpenAI-compatible API format
 ```
 
-**優勢**:
-- 本地優先：BM25+Vector 在本地完成，無 API 成本
-- LLM 精篩：僅對候選結果調用 LLM，減少 token 消耗
-- 可選降級：Vector 未安裝時自動 fallback 到純 BM25
+**Advantages**:
+- Local-first: BM25+Vector computed locally, no API costs
+- LLM filtering: Only candidate results sent to LLM, reduced token consumption
+- Optional fallback: Auto-fallback to pure BM25 when Vector not installed
 
-**模型選擇**: 支持多種嵌入模型，詳見 [Vector Models 比較](docs/core/COMPARISON.md#vector-embedding-models-比較)
+**Model Selection**: Multiple embedding models supported, see [Vector Models Comparison](docs/core/COMPARISON.md#vector-embedding-models-比較)
 
-#### BM25 + Vector 技術細節
+#### BM25 + Vector Technical Details
 
 ```mermaid
 flowchart TB
-    Q["🔍 查詢: 認證模組"]
+    Q["🔍 Query: auth module"]
 
-    Q --> BM25["<b>BM25</b><br/>DuckDB FTS<br/>關鍵字匹配"]
-    Q --> Vector["<b>Vector</b><br/>FAISS + Qwen3-Embedding<br/>語義相似度 (2560 dims)"]
+    Q --> BM25["<b>BM25</b><br/>DuckDB FTS<br/>Keyword matching"]
+    Q --> Vector["<b>Vector</b><br/>FAISS + Qwen3-Embedding<br/>Semantic similarity (2560 dims)"]
 
-    BM25 -->|"k×3 結果"| Merge["<b>Hybrid Merge</b><br/>score = bm25_w×s1 + vec_w×s2<br/>(默認各 0.5)"]
-    Vector -->|"k×3 結果"| Merge
+    BM25 -->|"k×3 results"| Merge["<b>Hybrid Merge</b><br/>score = bm25_w×s1 + vec_w×s2<br/>(default 0.5 each)"]
+    Vector -->|"k×3 results"| Merge
 
-    Merge --> Dedup["<b>同檔去重</b><br/>每檔最多 2 chunks"]
+    Merge --> Dedup["<b>Per-file Dedup</b><br/>Max 2 chunks per file"]
     Dedup --> Rerank["<b>LLM Re-rank</b><br/>GLM-4.7 / MiniMax"]
-    Rerank --> Result["📋 返回 Top-K 結果"]
+    Rerank --> Result["📋 Return Top-K Results"]
 
     style Q fill:#e1f5fe
     style Result fill:#c8e6c9
     style Rerank fill:#fff3e0
 ```
 
-| 組件 | 實現 | 特點 |
-|------|------|------|
-| **BM25** | DuckDB FTS | 精確關鍵字匹配、零延遲 |
-| **Vector** | FAISS + sentence-transformers | 語義理解、跨語言 |
-| **Hybrid** | 加權融合 | 兼顧精確性和語義 |
+| Component | Implementation | Features |
+|-----------|---------------|----------|
+| **BM25** | DuckDB FTS | Exact keyword matching, zero latency |
+| **Vector** | FAISS + sentence-transformers | Semantic understanding, cross-language |
+| **Hybrid** | Weighted fusion | Balance precision and semantics |
 
-#### 技術參數配置
+#### Technical Parameters
 
-| 參數類別 | 配置 | 說明 |
-|----------|------|------|
-| **向量庫** | FAISS (`IndexFlatIP`) | 內積索引 + L2 normalize = cosine similarity |
-| **Embedding** | `qwen/qwen3-embedding-4b` (2560 dims) | OpenRouter API，fallback 到本地 384 dims |
-| **維度檢查** | ✅ Fail-fast | API 返回非預期維度時直接報錯 |
-| **Chunk (Code)** | 50 行 / 10 行重疊 | `.py`, `.js`, `.go`, `.rs` 等 50+ 種副檔名 |
-| **Chunk (Docs)** | 256 tokens / 32 tokens 重疊 | `.md`, `.txt`, `.rst`, `.html` 等 |
-| **TopK (hybrid)** | **k×3** (BM25 + Vector 各取 3 倍) | 合併後同檔去重再 re-rank |
-| **同檔去重** | ✅ 每檔最多保留 2 個 chunk | 平衡 recall 與去冗餘 |
-| **最大檔案** | 1 MB | 超過自動跳過 |
+| Category | Configuration | Description |
+|----------|--------------|-------------|
+| **Vector Store** | FAISS (`IndexFlatIP`) | Inner product index + L2 normalize = cosine similarity |
+| **Embedding** | `qwen/qwen3-embedding-4b` (2560 dims) | OpenRouter API, fallback to local 384 dims |
+| **Dimension Check** | ✅ Fail-fast | Error immediately on unexpected API dimensions |
+| **Chunk (Code)** | 50 lines / 10 lines overlap | `.py`, `.js`, `.go`, `.rs` and 50+ extensions |
+| **Chunk (Docs)** | 256 tokens / 32 tokens overlap | `.md`, `.txt`, `.rst`, `.html` etc. |
+| **TopK (hybrid)** | **k×3** (BM25 + Vector each fetch 3x) | Merge → per-file dedup → re-rank |
+| **Per-file Dedup** | ✅ Max 2 chunks per file | Balance recall vs redundancy |
+| **Max File Size** | 1 MB | Larger files auto-skipped |
 
 <details>
-<summary>📊 查詢流程示意 (v1.3.3+)</summary>
+<summary>📊 Query Flow Diagram (v1.3.3+)</summary>
 
 ```
-BM25: k*3 = 30 結果
-Vector: k*3 = 30 結果
-       ↓ 合併去重 (by source)
-    ~50-60 候選
-       ↓ 同檔去重 (每檔最多 2 個 chunk)
-    ~35-50 候選
+BM25: k*3 = 30 results
+Vector: k*3 = 30 results
+       ↓ Merge + dedup (by source)
+    ~50-60 candidates
+       ↓ Per-file dedup (max 2 chunks per file)
+    ~35-50 candidates
        ↓ Re-rank (LLM subagent)
-    返回 top-10
+    Return top-10
 ```
 </details>
 
 <details>
-<summary>📁 支援的檔案類型 (70+ 種)</summary>
+<summary>📁 Supported File Types (70+)</summary>
 
 **Code** (line-based chunking):
 - Python: `.py`, `.pyw`, `.pyi`, `.pyx`
@@ -184,62 +186,62 @@ Vector: k*3 = 30 結果
 - `.md`, `.markdown`, `.txt`, `.rst`, `.html`, `.adoc`, `.org`, `.tex`
 </details>
 
-**Fallback 機制**：
-- Vector 依賴未安裝 → 自動降級為純 BM25
-- Vector 索引不存在 → 自動降級為純 BM25
+**Fallback Mechanism**:
+- Vector dependencies not installed → Auto-fallback to pure BM25
+- Vector index doesn't exist → Auto-fallback to pure BM25
 
 ### 3. 📁 Multi-Project Management
-**彈性專案組織**
+**Flexible Project Organization**
 
 ```bash
-# 三種方式指定專案
-./scripts/manage.sh add myproject /path/to/project  # 名稱
-./scripts/manage.sh rebuild 45d8fb52                # ID (8 字元)
-./scripts/manage.sh add auto .                      # 自動偵測
+# Three ways to specify a project
+./scripts/manage.sh add myproject /path/to/project  # By name
+./scripts/manage.sh rebuild 45d8fb52                # By ID (8 chars)
+./scripts/manage.sh add auto .                      # Auto-detect
 
-# Claude Code 自動使用當前工作目錄專案
-# 無需手動切換
+# Claude Code auto-uses current working directory project
+# No manual switching required
 ```
 
 ### 4. 💾 Advanced Caching
-**多層快取架構**
+**Multi-Layer Cache Architecture**
 
-- **精確快取** (SQLite): 完全匹配的查詢直接返回
-- **語義快取** (FAISS): 相似查詢 cosine similarity 匹配
-- **LLM 快取**: API 回應快取（減少重複調用）
+- **Exact Cache** (SQLite): Direct return for exact query matches
+- **Semantic Cache** (FAISS): Cosine similarity matching for similar queries
+- **LLM Cache**: API response caching (reduces repeated calls)
 
-**優勢**: 重複查詢即時返回，無需重新計算
+**Advantage**: Repeated queries return instantly, no recomputation
 
 ### 5. 🧠 Memory & Tasks
-**長期記憶 + 任務追蹤**
+**Long-term Memory + Task Tracking**
 
 ```python
-# 長期記憶（跨會話持久化）
+# Long-term memory (persists across sessions)
 memory.set("api_key", "secret_value", project="myproject")
 memory.get("api_key")
 
-# 任務管理
+# Task management
 task.add("Implement feature X", priority=10)
 task.list(status="in_progress")
 ```
 
 ### 6. 🌐 Web UI (v0.7.0)
-**專業管理界面**
+**Professional Management Interface**
 
 ```bash
 cd web_ui && ./start.sh  # http://localhost:8080
 ```
 
-- ✅ 實時日誌流（WebSocket）
-- ✅ 交互式搜索測試
-- ✅ 專案儀表板
-- ✅ 現代化深色主題
+- ✅ Real-time log streaming (WebSocket)
+- ✅ Interactive search testing
+- ✅ Project dashboard
+- ✅ Modern dark theme
 
 ### 7. 🤖 MCP Protocol Compliance
-**31 個 MCP Tools**
+**31 MCP Tools**
 
-| 類別 | Tools |
-|------|-------|
+| Category | Tools |
+|----------|-------|
 | **RAG** | `rag.search`, `answer.generate`, `answer.accumulated`, `answer.unified` |
 | **Dual Search** | `dual.search` |
 | **Project** | `project.init`, `project.status` |
@@ -252,35 +254,35 @@ cd web_ui && ./start.sh  # http://localhost:8080
 | **File** | `file.read`, `file.list`, `file.find` |
 
 ### 8. 🔄 Unified Search (v1.3.2+)
-**auggie + augment-lite 多引擎編排**
+**auggie + augment-lite Multi-Engine Orchestration**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│               answer.unified (指揮官工具)                    │
+│               answer.unified (Orchestrator Tool)            │
 │                                                              │
-│  1. [minimax-m2.1] 分解查詢 → sub_queries                   │
-│  2. 返回執行計劃給 Claude                                    │
+│  1. [minimax-m2.1] Decompose query → sub_queries            │
+│  2. Return execution plan to Claude                         │
 └──────────────────────┬──────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              Claude 按計劃自動執行                           │
+│              Claude Executes Plan Automatically              │
 │                                                              │
 │  Step 1: auggie-mcp → semantic_results                      │
 │  Step 2: rag.search [minimax re-rank] → rag_results         │
 │  Step 3-N: rag.search (sub-queries) → more_results          │
-│  Step N+1: 合併 evidence → [GLM-4.7] → final_answer         │
+│  Step N+1: Merge evidence → [GLM-4.7] → final_answer        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-| Tool | 觸發時機 | 模型調用 |
-|------|----------|----------|
-| `answer.accumulated` | 複雜問題、之前返回"不知道" | minimax (分解) → GLM-4.7 (答案) |
-| `answer.unified` | 需要 auggie + augment-lite 雙引擎 | minimax (分解) + auggie + GLM-4.7 |
-| `dual.search` | 僅需搜索結果，不需答案生成 | minimax (re-rank) |
+| Tool | Trigger | Model Calls |
+|------|---------|-------------|
+| `answer.accumulated` | Complex questions, previous "don't know" | minimax (decompose) → GLM-4.7 (answer) |
+| `answer.unified` | Need auggie + augment-lite dual engine | minimax (decompose) + auggie + GLM-4.7 |
+| `dual.search` | Only need search results, no answer generation | minimax (re-rank) |
 
-**Auto-Rebuild 功能 (v1.3.2+)**
+**Auto-Rebuild Feature (v1.3.2+)**
 
-當 `dual.search` 偵測到 auggie 返回的檔案 >50% 不在 augment-lite 結果中，自動觸發 `incremental_index` 重建並重新搜索：
+When `dual.search` detects >50% of auggie's returned files are missing from augment-lite results, auto-triggers `incremental_index` rebuild and re-searches:
 
 ```json
 {
@@ -292,50 +294,50 @@ cd web_ui && ./start.sh  # http://localhost:8080
 }
 ```
 
-| 參數 | 預設 | 說明 |
-|------|------|------|
-| `auto_rebuild` | `true` | 自動重建過時索引 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `auto_rebuild` | `true` | Auto-rebuild stale index |
 
 ---
 
-## 📦 快速開始
+## 📦 Quick Start
 
-### 安裝
+### Installation
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/zoonderkins/augment-lite-mcp.git
 cd augment-lite-mcp
 
-# 2. 安裝依賴 (使用 uv)
+# 2. Install dependencies (using uv)
 uv venv .venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
 
-# 或使用標準 Python
+# Or using standard Python
 # python3 -m venv .venv && source .venv/bin/activate
 # pip install -r requirements.txt
 
-# 3. 配置 API Keys
+# 3. Configure API Keys
 cp .env.example .env
-# 編輯 .env 填入必需的 API Keys:
-#   - GLM_API_KEY (從 z.ai 獲取)
-#   - MINIMAX_API_KEY (從 minimax.io 獲取)
-#   - OPENROUTER_API_KEY (從 openrouter.ai/keys 獲取) - 用於 Embedding
+# Edit .env and fill in required API Keys:
+#   - GLM_API_KEY (from z.ai)
+#   - MINIMAX_API_KEY (from minimax.io)
+#   - OPENROUTER_API_KEY (from openrouter.ai/keys) - for Embeddings
 
-# 4. (可選) 安裝向量搜索依賴 (~2GB)
+# 4. (Optional) Install vector search dependencies (~2GB)
 bash scripts/install_vector_deps.sh
 
-# 5. 添加專案並建立索引
+# 5. Add project and build index
 ./scripts/manage.sh add auto .
 ```
 
-### 配置 MCP
+### Configure MCP
 
-#### 方式 1: Claude MCP CLI（推薦）
+#### Method 1: Claude MCP CLI (Recommended)
 
 ```bash
-# 使用 Claude MCP CLI 一鍵配置
+# One-command setup with Claude MCP CLI
 claude mcp add --scope user --transport stdio augment-lite \
   --env AUGMENT_DB_DIR="$HOME/augment-lite-mcp/data" \
   --env GLM_API_KEY="your-glm-api-key" \
@@ -346,9 +348,9 @@ claude mcp add --scope user --transport stdio augment-lite \
 ```
 
 
-#### 方式 2: 手動配置 JSON
+#### Method 2: Manual JSON Configuration
 
-編輯 `~/.claude/config.json`:
+Edit `~/.claude/config.json`:
 
 ```json
 {
@@ -367,20 +369,20 @@ claude mcp add --scope user --transport stdio augment-lite \
 }
 ```
 
-**環境變量說明**:
+**Environment Variables**:
 
-| 變量 | 必需 | 說明 |
-|------|------|------|
-| `AUGMENT_DB_DIR` | ✅ | 數據目錄（索引、快取、記憶） |
-| `GLM_API_KEY` | ✅ | GLM-4.7 原廠 API Key (從 z.ai 獲取) |
-| `MINIMAX_API_KEY` | ✅ | MiniMax-M2.1 原廠 API Key (從 minimax.io 獲取) |
-| `OPENROUTER_API_KEY` | ✅ | OpenRouter API Key (從 openrouter.ai/keys 獲取) - 用於 Embedding |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUGMENT_DB_DIR` | ✅ | Data directory (index, cache, memory) |
+| `GLM_API_KEY` | ✅ | GLM-4.7 API Key (from z.ai) |
+| `MINIMAX_API_KEY` | ✅ | MiniMax-M2.1 API Key (from minimax.io) |
+| `OPENROUTER_API_KEY` | ✅ | OpenRouter API Key (from openrouter.ai/keys) - for Embeddings |
 
-> **Embedding 說明**: 使用 OpenRouter 調用 `qwen/qwen3-embedding-4b` (2560 維)。若未設定 `OPENROUTER_API_KEY`，自動 fallback 到本地 `all-MiniLM-L6-v2` (384 維)。
+> **Embedding Note**: Uses OpenRouter to call `qwen/qwen3-embedding-4b` (2560 dims). If `OPENROUTER_API_KEY` not set, auto-fallback to local `all-MiniLM-L6-v2` (384 dims).
 
-#### 方式 3: 本地代理模式 (可選)
+#### Method 3: Local Proxy Mode (Optional)
 
-如需使用 [claude-code-proxy](https://github.com/anthropics/claude-code-proxy) 本地代理:
+If using [claude-code-proxy](https://github.com/anthropics/claude-code-proxy) local proxy:
 
 ```json
 {
@@ -395,80 +397,80 @@ claude mcp add --scope user --transport stdio augment-lite \
 }
 ```
 
-然後修改 `config/models.yaml` 的 routes 使用 `glm-local` / `minimax-local`
+Then modify `config/models.yaml` routes to use `glm-local` / `minimax-local`
 
-### 使用
+### Usage
 
 ```python
-# 在 Claude Code 中
-# AI 會自動使用 augment-lite MCP tools
+# In Claude Code
+# AI automatically uses augment-lite MCP tools
 
-# 搜索代碼
-"幫我找到處理用戶登錄的代碼"
+# Search code
+"Help me find the user login handling code"
 
-# 生成答案（帶引用）
-"如何配置資料庫連接？"
+# Generate answers (with citations)
+"How do I configure the database connection?"
 
-# 管理任務
-"添加任務：重構認證模組"
+# Manage tasks
+"Add task: Refactor authentication module"
 ```
 
 ---
 
-## 🚀 首次初始化
+## 🚀 First-Time Initialization
 
-當你在專案目錄首次執行 Claude CLI 時，augment-lite 會自動：
+When you first run Claude CLI in a project directory, augment-lite automatically:
 
 ```
-1. 專案偵測
-   └─ 自動識別當前工作目錄為專案
+1. Project Detection
+   └─ Auto-identifies current working directory as project
 
-2. 索引建立 (離線)
-   ├─ BM25 索引 (DuckDB) - 關鍵字搜索
-   └─ 向量索引 (FAISS) - 語義搜索 (可選)
+2. Index Building (offline)
+   ├─ BM25 index (DuckDB) - keyword search
+   └─ Vector index (FAISS) - semantic search (optional)
 
-3. 快取初始化
-   ├─ 精確快取 (SQLite)
-   └─ 語義快取 (FAISS)
+3. Cache Initialization
+   ├─ Exact cache (SQLite)
+   └─ Semantic cache (FAISS)
 
-4. 記憶體初始化
-   └─ 長期記憶 (SQLite)
+4. Memory Initialization
+   └─ Long-term memory (SQLite)
 ```
 
-**手動初始化：**
+**Manual Initialization:**
 ```bash
 ./scripts/manage.sh add auto .
 ```
 
 ---
 
-## 🔄 執行邏輯流程
+## 🔄 Execution Flow
 
-### Auto-Init + Auto-Index 完整流程
+### Auto-Init + Auto-Index Complete Flow
 
-當你執行任何 RAG 操作時（如 `rag.search`），augment-lite 會自動處理：
+When you execute any RAG operation (like `rag.search`), augment-lite handles everything automatically:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    用戶執行 rag.search                    │
+│                    User executes rag.search             │
 └─────────────────────────┬───────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │              resolve_auto_project()                      │
-│  優先級: 1.目錄名匹配 2.路徑匹配 3.active專案 4.None     │
+│  Priority: 1.Dir name match 2.Path match 3.Active 4.None │
 └─────────────────────────┬───────────────────────────────┘
                           │
               ┌───────────┴───────────┐
               │                       │
-         專案已註冊              專案未註冊
+      Project registered      Project not registered
               │                       │
               │                       ▼
               │         ┌─────────────────────────┐
               │         │      AUTO-INIT          │
-              │         │  - 消毒目錄名為專案名    │
-              │         │  - 註冊到 projects.json │
-              │         │  - 設為 active          │
+              │         │  - Sanitize dir name    │
+              │         │  - Register to projects │
+              │         │  - Set as active        │
               │         └───────────┬─────────────┘
               │                     │
               └──────────┬──────────┘
@@ -476,123 +478,124 @@ claude mcp add --scope user --transport stdio augment-lite \
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │              auto_index_if_needed()                      │
-│               檢測文件變更                                │
+│               Detect file changes                        │
 └─────────────────────────┬───────────────────────────────┘
                           │
               ┌───────────┴───────────┐
               │                       │
-          有索引狀態             無索引狀態
+      Has index state          No index state
               │                       │
               ▼                       ▼
      ┌────────────────┐      ┌────────────────┐
-     │  增量更新       │      │  全量建立       │
-     │  只處理變更文件  │      │  所有文件視為   │
-     │  (mtime+MD5)   │      │  "added"       │
+     │  Incremental   │      │  Full build    │
+     │  Only process  │      │  All files as  │
+     │  changed files │      │  "added"       │
+     │  (mtime+MD5)   │      │                │
      └────────┬───────┘      └────────┬───────┘
               │                       │
               └───────────┬───────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────┐
-│                     執行搜索                             │
-│  BM25 + Vector 混合 → LLM 智能過濾 → 返回結果            │
+│                     Execute Search                       │
+│  BM25 + Vector hybrid → LLM filtering → Return results   │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 關鍵特性
+### Key Features
 
-| 特性 | 說明 |
-|------|------|
-| **零配置** | 無需手動 `project.init`，首次搜索自動初始化 |
-| **零維護** | 自動檢測文件變更，增量更新索引 |
-| **智能消毒** | 目錄名中的 `.` 等特殊字符自動替換為 `-` |
-| **自動激活** | 新專案自動設為 active，無需手動切換 |
+| Feature | Description |
+|---------|-------------|
+| **Zero Config** | No manual `project.init` needed, first search auto-initializes |
+| **Zero Maintenance** | Auto-detect file changes, incremental index updates |
+| **Smart Sanitization** | Special chars like `.` in dir names auto-replaced with `-` |
+| **Auto Activation** | New projects auto-set as active, no manual switching |
 
-### 執行順序
+### Execution Order
 
 ```bash
-# 傳統方式 (仍支持)
+# Traditional way (still supported)
 project.init → index.rebuild → rag.search
 
-# 新方式 (推薦)
-rag.search  # 自動處理 init + index
+# New way (recommended)
+rag.search  # Auto-handles init + index
 ```
 
 ---
 
-## 🔧 功能說明
+## 🔧 Feature Reference
 
-### RAG 功能 (離線)
+### RAG Features (Offline)
 
-| Tool | 說明 | 用法 |
-|------|------|------|
-| `rag.search` | BM25 + 向量混合搜索 | 搜索代碼片段 |
-| `answer.generate` | 基於檢索結果生成答案 | 帶引用的回答 |
-| `answer.accumulated` | 多輪累積 evidence 問答 | 複雜問題、避免"不知道" |
-| `answer.unified` | auggie + augment-lite 編排 | 返回執行計劃讓 Claude 按序調用 |
-| `dual.search` | 雙引擎搜索 | 本地 RAG + auggie hint |
-| `index.rebuild` | 重建專案索引 | 索引損壞時使用 |
-| `index.status` | 檢查索引狀態 | 查看索引健康度 |
+| Tool | Description | Usage |
+|------|-------------|-------|
+| `rag.search` | BM25 + vector hybrid search | Search code snippets |
+| `answer.generate` | Generate answers from retrieval | Answers with citations |
+| `answer.accumulated` | Multi-round evidence accumulation | Complex questions, avoid "don't know" |
+| `answer.unified` | auggie + augment-lite orchestration | Returns execution plan for Claude |
+| `dual.search` | Dual-engine search | Local RAG + auggie hint |
+| `index.rebuild` | Rebuild project index | Use when index corrupted |
+| `index.status` | Check index status | View index health |
 
-### 代碼分析功能 (Serena 類似) - Tree-sitter 多語言支援
+### Code Analysis Features (Serena-like) - Tree-sitter Multi-language Support
 
-| Tool | 說明 | 範例 |
-|------|------|------|
-| `code.symbols` | 獲取代碼符號概覽 | 列出類、函數、方法 |
-| `code.find_symbol` | 查找符號定義 | 找到 `MyClass` 定義位置 |
-| `code.references` | 查找符號引用 (AST) | 找到所有使用 `my_func` 的地方 |
-| `search.pattern` | 正則模式搜索 | `def.*search` 匹配 |
-| `file.read` | 讀取文件內容 | 支持行範圍 |
-| `file.list` | 列出目錄內容 | 支持 glob 過濾 |
-| `file.find` | 查找文件 | `**/*.py` 模式 |
+| Tool | Description | Example |
+|------|-------------|---------|
+| `code.symbols` | Get code symbol overview | List classes, functions, methods |
+| `code.find_symbol` | Find symbol definition | Find `MyClass` definition location |
+| `code.references` | Find symbol references (AST) | Find all usages of `my_func` |
+| `search.pattern` | Regex pattern search | `def.*search` matching |
+| `file.read` | Read file content | Supports line ranges |
+| `file.list` | List directory contents | Supports glob filters |
+| `file.find` | Find files | `**/*.py` patterns |
 
-**支援語言** (v1.3.0+, Tree-sitter):
+**Supported Languages** (v1.3.0+, Tree-sitter):
 ```
 Python, JavaScript, TypeScript, Go, Rust, Bash,
 JSON, YAML, HTML, CSS, HCL (Terraform), TOML
 ```
 
-### 記憶與任務
+### Memory and Tasks
 
-| Tool | 說明 |
-|------|------|
-| `memory.get/set/delete/list` | 長期記憶管理 |
-| `task.add/list/update/delete` | 任務追蹤 |
-| `project.init/status` | 專案管理 |
-| `cache.clear/status` | 快取管理 |
+| Tool | Description |
+|------|-------------|
+| `memory.get/set/delete/list` | Long-term memory management |
+| `task.add/list/update/delete` | Task tracking |
+| `project.init/status` | Project management |
+| `cache.clear/status` | Cache management |
 
-### 🧠 Memory 使用模式（Serena-style）
+### 🧠 Memory Usage Patterns (Serena-style)
 
-AI 會**主動**在以下情況自動存儲 Memory：
+AI **proactively** auto-stores Memory in these situations:
 
-| 觸發條件 | 建議 Key | 內容範例 |
-|----------|----------|----------|
-| 首次交互 | `project_overview` | 專案名稱、版本、用途、核心模組 |
-| 偵測到代碼風格 | `code_style` | ruff, 100 chars, Python 3.12+ |
-| 讀取 README/docs | `suggested_commands` | setup, build, test 命令 |
-| 用戶解釋架構 | `architecture_decisions` | 微服務、GraphQL、Redis 快取 |
-| 用戶提到部署 | `deployment_notes` | Docker, K8s, 環境變數 |
-| 發現 Bug 模式 | `known_issues` | 常見錯誤、workaround |
+| Trigger Condition | Suggested Key | Example Content |
+|-------------------|---------------|-----------------|
+| First interaction | `project_overview` | Project name, version, purpose, core modules |
+| Code style detected | `code_style` | ruff, 100 chars, Python 3.12+ |
+| Read README/docs | `suggested_commands` | setup, build, test commands |
+| User explains architecture | `architecture_decisions` | Microservices, GraphQL, Redis cache |
+| User mentions deployment | `deployment_notes` | Docker, K8s, environment variables |
+| Bug pattern found | `known_issues` | Common errors, workarounds |
 
-**標準 Memory Keys:**
+**Standard Memory Keys:**
 ```
-project_overview          # 專案概覽
-code_style                # 代碼風格
-suggested_commands        # 常用命令
-architecture_decisions    # 架構決策
-api_conventions           # API 規範
-deployment_notes          # 部署筆記
-known_issues              # 已知問題
-task_completion_checklist # 完成清單
+project_overview          # Project overview
+code_style                # Code style
+suggested_commands        # Common commands
+architecture_decisions    # Architecture decisions
+api_conventions           # API conventions
+deployment_notes          # Deployment notes
+known_issues              # Known issues
+task_completion_checklist # Completion checklist
 ```
 
 ---
 
-## 🔌 Auggie MCP 整合（可選）
+## 🔌 Auggie MCP Integration (Optional)
 
-**節省 Token + 提升語義準確度**
+**Save Tokens + Improve Semantic Accuracy**
 
-augment-lite 可與 [Auggie MCP](https://docs.augmentcode.com/context-services/mcp/quickstart-claude-code) 協同工作：
+augment-lite can work collaboratively with [Auggie MCP](https://docs.augmentcode.com/context-services/mcp/quickstart-claude-code):
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -609,77 +612,77 @@ augment-lite 可與 [Auggie MCP](https://docs.augmentcode.com/context-services/m
      └──────────┬──────────────┘
                 │
         ┌───────▼───────┐
-        │  Results 合併  │
-        │  去重 + 排序   │
+        │  Merge Results│
+        │  Dedup + Sort │
         └───────────────┘
 ```
 
-### 安裝 Auggie MCP
+### Install Auggie MCP
 
 ```bash
-# 1. 安裝 auggie CLI
+# 1. Install auggie CLI
 npm install -g @augmentcode/auggie@latest
 
-# 2. 登入（需要 Augment Code 帳號）
+# 2. Login (requires Augment Code account)
 auggie login
 
-# 3. 添加到 Claude Code
+# 3. Add to Claude Code
 claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie","args":["--mcp"]}'
 ```
 
-### 使用模式
+### Usage Modes
 
-| 模式 | 說明 | Token 消耗 |
-|------|------|-----------|
-| **僅 augment-lite** | BM25 + Vector 本地搜索 | 低 |
-| **僅 auggie-mcp** | Augment 語義引擎 | 最低 |
-| **混合模式（推薦）** | augment-lite 初篩 + auggie 精篩 | 中 |
+| Mode | Description | Token Consumption |
+|------|-------------|-------------------|
+| **augment-lite only** | BM25 + Vector local search | Low |
+| **auggie-mcp only** | Augment semantic engine | Lowest |
+| **Hybrid mode (Recommended)** | augment-lite initial filter + auggie refinement | Medium |
 
-### 推薦工作流
+### Recommended Workflow
 
 ```
-1. 用戶查詢 "找到認證模組"
-2. augment-lite rag.search → 獲得 20 個候選
-3. auggie-mcp codebase-retrieval → 語義排序
-4. Claude 合併結果 → 返回最相關 5 個
+1. User query "find auth module"
+2. augment-lite rag.search → Get 20 candidates
+3. auggie-mcp codebase-retrieval → Semantic sort
+4. Claude merges results → Return most relevant 5
 ```
 
-> **無 Auggie 時的 Fallback**：augment-lite 使用內建 LLM 過濾（GLM-4.7/MiniMax），仍可獨立運作
+> **Fallback without Auggie**: augment-lite uses built-in LLM filtering (GLM-4.7/MiniMax), can work independently
 
 ### 🛡️ Guardrails (v1.2.0)
 
-| 模組 | 功能 | 說明 |
-|------|------|------|
-| `prompt_injection` | 提示注入檢測 | 防止指令覆蓋、角色劫持、越獄攻擊 |
-| `pii_detection` | PII/敏感數據檢測 | 郵箱、電話、SSN、API Key、JWT |
-| `code_security` | 代碼安全掃描 | SQL注入、XSS、命令注入、OWASP Top 10 |
-| `hallucination` | 幻覺檢測 | 驗證回答是否基於提供的證據 |
-| `context_grounding` | 上下文根基 | 確保回答不超出提供的上下文 |
-| `schema_validation` | 輸出驗證 | JSON schema 驗證、MCP 輸出格式 |
+| Module | Function | Description |
+|--------|----------|-------------|
+| `prompt_injection` | Prompt injection detection | Prevent instruction override, role hijacking, jailbreak |
+| `pii_detection` | PII/sensitive data detection | Email, phone, SSN, API Key, JWT |
+| `code_security` | Code security scanning | SQL injection, XSS, command injection, OWASP Top 10 |
+| `hallucination` | Hallucination detection | Verify answers are based on provided evidence |
+| `context_grounding` | Context grounding | Ensure answers don't exceed provided context |
+| `schema_validation` | Output validation | JSON schema validation, MCP output format |
 
 ---
 
-## 🔑 環境變數
+## 🔑 Environment Variables
 
-### 必需
+### Required
 
-| 變數 | 說明 | 獲取 |
-|------|------|------|
-| `GLM_API_KEY` | GLM-4.7 原廠 API Key | [z.ai](https://z.ai) |
-| `MINIMAX_API_KEY` | MiniMax-M2.1 原廠 API Key | [minimax.io](https://minimax.io) |
+| Variable | Description | Source |
+|----------|-------------|--------|
+| `GLM_API_KEY` | GLM-4.7 API Key | [z.ai](https://z.ai) |
+| `MINIMAX_API_KEY` | MiniMax-M2.1 API Key | [minimax.io](https://minimax.io) |
 
-### 可選
+### Optional
 
-| 變數 | 說明 | 預設值 |
-|------|------|--------|
-| `AUGMENT_DB_DIR` | 數據目錄 | `./data` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AUGMENT_DB_DIR` | Data directory | `./data` |
 
-### 本地代理 (可選)
+### Local Proxy (Optional)
 
-如需使用 claude-code-proxy：
+If using claude-code-proxy:
 
-| 變數 | 說明 |
-|------|------|
+| Variable | Description |
+|----------|-------------|
 | `GLM_LOCAL_BASE_URL` | `http://127.0.0.1:8082/v1` |
 | `GLM_LOCAL_API_KEY` | `dummy` |
 | `MINIMAX_LOCAL_BASE_URL` | `http://127.0.0.1:8083/v1` |
@@ -687,7 +690,7 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 
 ---
 
-## 🏗️ 架構概覽
+## 🏗️ Architecture Overview
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -716,41 +719,41 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
      │
 ┌────▼─────────────────────────────────┐
 │  Layer 2: Remote LLM Re-ranking      │
-│  - GLM-4.7 / MiniMax-M2.1 (原廠)     │
+│  - GLM-4.7 / MiniMax-M2.1 (native)   │
 │  - Smart filtering + deduplication   │
 │  - Final 8 results                   │
 └──────────────────────────────────────┘
 ```
 
-### 🤖 Providers 配置 (全部原廠)
+### 🤖 Provider Configuration (All Native)
 
 | Provider | Endpoint | Context | Max Output |
 |----------|----------|---------|------------|
 | **glm-4.7** | `api.z.ai/api/anthropic` | 200K | 128K |
 | **minimax-m2.1** | `api.minimax.io/anthropic` | 200K | - |
 
-### 📊 Routes 配置
+### 📊 Route Configuration
 
-| Route | Provider | Max Output | 觸發條件 |
+| Route | Provider | Max Output | Trigger |
 |-------|----------|-----------|---------|
 | `small-fast` | minimax-m2.1 | 2048 | lookup, small_fix |
 | `general` | glm-4.7 | 4096 | general tasks |
 | `reason-large` | glm-4.7 | 8192 | refactor, reason |
 | `big-mid` | glm-4.7 | 8192 | tokens > 200K |
 | `long-context` | glm-4.7 | 8192 | tokens > 400K |
-| `ultra-long-context` | glm-4.7 | 16384 | 超長上下文 |
-| `fast-reasoning` | minimax-m2.1 | 4096 | 快速推理 |
+| `ultra-long-context` | glm-4.7 | 16384 | ultra-long context |
+| `fast-reasoning` | minimax-m2.1 | 4096 | fast reasoning |
 
 ---
 
-## 🎯 支援的功能
+## 🎯 Supported Features
 
-### ✅ 已實現
+### ✅ Implemented
 
-- [x] Auto-incremental indexing (零維護)
-- [x] Dual-layer retrieval (本地+遠端)
-- [x] Multi-project management (名稱/ID/auto)
-- [x] Three-layer caching (精確+語義+Provider)
+- [x] Auto-incremental indexing (zero maintenance)
+- [x] Dual-layer retrieval (local + remote)
+- [x] Multi-project management (name/ID/auto)
+- [x] Three-layer caching (exact + semantic + provider)
 - [x] Long-term memory (global/project scope)
 - [x] Task management (structured tracking)
 - [x] Web UI (FastAPI + WebSocket)
@@ -768,43 +771,43 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
   - Context Grounding Validation
   - Output Schema Validation
 
-### 🚧 計劃中 (v1.4.0+)
+### 🚧 Planned (v1.4.0+)
 
-#### 代碼理解增強
+#### Code Understanding Enhancement
 
-| 方案 | 功能 | 狀態 |
-|------|------|------|
-| **Tree-sitter** | AST 結構解析 (12 語言) | ✅ v1.3.0 已實現 |
-| **修改型 Symbol 工具** | rename, edit_symbol_body | 🚧 v1.4.0 計劃中 |
-| **LSP Bridge** | 完整語義分析 | 🚧 v1.5.0 計劃中 |
-| **Auggie MCP** | 外部語義引擎 | 🚧 可選整合 |
+| Approach | Functionality | Status |
+|----------|--------------|--------|
+| **Tree-sitter** | AST structure parsing (12 languages) | ✅ v1.3.0 implemented |
+| **Modify Symbol Tools** | rename, edit_symbol_body | 🚧 v1.4.0 planned |
+| **LSP Bridge** | Complete semantic analysis | 🚧 v1.5.0 planned |
+| **Auggie MCP** | External semantic engine | 🚧 Optional integration |
 
-**已完成 (v1.3.0)**:
-- [x] **Tree-sitter 整合**: 12 語言 AST 解析
+**Completed (v1.3.0)**:
+- [x] **Tree-sitter Integration**: 12 language AST parsing
   - Python, JavaScript, TypeScript, Go, Rust, Bash
   - JSON, YAML, HTML, CSS, HCL (Terraform), TOML
-- [x] **AST-based References**: `code.references` 使用 Tree-sitter 精準定位
+- [x] **AST-based References**: `code.references` uses Tree-sitter for precise location
 
-**v1.4.0 計劃 (P85)**:
-- [ ] **修改型 Symbol 工具** (Serena 核心差距)
-  - `code.rename_symbol` - Scope-aware 安全重命名
-  - `code.edit_symbol_body` - 精準替換 symbol 內容
+**v1.4.0 Plan (P85)**:
+- [ ] **Modify Symbol Tools** (Serena core gap)
+  - `code.rename_symbol` - Scope-aware safe renaming
+  - `code.edit_symbol_body` - Precise symbol content replacement
   - `code.insert_before_symbol` / `code.insert_after_symbol`
-  - 初期方案：AST-based Python-only 版本
+  - Initial approach: AST-based Python-only version
 
-**v1.5.0 計劃 (P80)**:
-- [ ] **LSP → MCP Bridge**: 完整語義分析
-  - rename (跨文件安全重構)
+**v1.5.0 Plan (P80)**:
+- [ ] **LSP → MCP Bridge**: Complete semantic analysis
+  - rename (cross-file safe refactoring)
   - diagnostics (lint/errors)
   - code actions
-  - 方案：整合 mcp-language-server 或自建 LSP client wrapper
+  - Approach: Integrate mcp-language-server or build LSP client wrapper
 
-**研究中 (P70)**:
-- [ ] **Auggie MCP 深度整合**: 評估可否作為 LSP 替代
-  - 安裝: `npm install -g @augmentcode/auggie@latest && auggie login`
-  - 配置: `claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie","args":["--mcp"]}'`
+**Research (P70)**:
+- [ ] **Auggie MCP Deep Integration**: Evaluate as LSP alternative
+  - Install: `npm install -g @augmentcode/auggie@latest && auggie login`
+  - Config: `claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie","args":["--mcp"]}'`
 
-#### 其他計劃
+#### Other Plans
 
 - [ ] Multi-language embeddings (multilingual-e5-large)
 - [ ] Code-specific embeddings (CodeBERT, UniXcoder)
@@ -817,123 +820,123 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 
 ---
 
-## 📊 效能特點
+## 📊 Performance Characteristics
 
-| 特點 | 說明 |
-|------|------|
-| **Indexing** | DuckDB BM25 批量索引，支援大型代碼庫 |
-| **Incremental** | 只更新變更文件，避免全量重建 |
-| **Local First** | BM25+Vector 本地計算，無 API 延遲 |
-| **LLM 精篩** | 僅候選結果送 LLM，減少 token 消耗 |
-| **Cache** | 重複查詢直接返回，無計算開銷 |
-
----
-
-## 📊 競品比較
-
-想了解 augment-lite-mcp 與其他方案的差異？
-
-- **vs Anthropic @modelcontextprotocol/context**: [查看對比](docs/core/COMPARISON.md#augment-lite-mcp-vs-anthropic-官方-context-providers)
-- **vs acemcp**: [查看對比](docs/core/COMPARISON.md#1-augment-lite-mcp-vs-acemcp)
-- **vs Augment Code**: [查看對比](docs/core/COMPARISON.md#2-augment-lite-mcp-vs-augment-code-proprietary)
-- **vs Qdrant/Weaviate**: [查看對比](docs/core/COMPARISON.md#3-augment-lite-mcp-vs-qdrantweaviate-vector-dbs)
-- **Vector Models 選擇指南**: [查看詳情](docs/core/COMPARISON.md#vector-embedding-models-比較)
+| Characteristic | Description |
+|----------------|-------------|
+| **Indexing** | DuckDB BM25 batch indexing, supports large codebases |
+| **Incremental** | Only update changed files, avoid full rebuild |
+| **Local First** | BM25+Vector computed locally, no API latency |
+| **LLM Filtering** | Only candidates sent to LLM, reduced token consumption |
+| **Cache** | Repeated queries return directly, no computation overhead |
 
 ---
 
-## 🙏 致謝與靈感來源
+## 📊 Comparison
 
-### 主要靈感來源
+Want to understand how augment-lite-mcp differs from other solutions?
+
+- **vs Anthropic @modelcontextprotocol/context**: [View comparison](docs/core/COMPARISON.md#augment-lite-mcp-vs-anthropic-官方-context-providers)
+- **vs acemcp**: [View comparison](docs/core/COMPARISON.md#1-augment-lite-mcp-vs-acemcp)
+- **vs Augment Code**: [View comparison](docs/core/COMPARISON.md#2-augment-lite-mcp-vs-augment-code-proprietary)
+- **vs Qdrant/Weaviate**: [View comparison](docs/core/COMPARISON.md#3-augment-lite-mcp-vs-qdrantweaviate-vector-dbs)
+- **Vector Models Selection Guide**: [View details](docs/core/COMPARISON.md#vector-embedding-models-比較)
+
+---
+
+## 🙏 Acknowledgments & Inspiration
+
+### Main Inspiration Sources
 
 - **[acemcp](https://github.com/wxxedu/acemcp)** by @wxxedu
-  - 💡 Auto-incremental indexing 實現方式
-  - 💡 Zero-maintenance 哲學
-  - 💡 Web UI 設計靈感
+  - 💡 Auto-incremental indexing implementation
+  - 💡 Zero-maintenance philosophy
+  - 💡 Web UI design inspiration
 
 - **[Augment Code](https://www.augmentcode.com/)** (Proprietary)
-  - 💡 Context Engine 架構洞察
-  - 💡 Two-stage retrieval (local + remote) 概念
+  - 💡 Context Engine architecture insights
+  - 💡 Two-stage retrieval (local + remote) concept
 
 - **[@modelcontextprotocol/context](https://github.com/modelcontextprotocol/servers)** by Anthropic
-  - 💡 MCP 協議標準參考
-  - 💡 簡潔高效的文件訪問設計
+  - 💡 MCP protocol standard reference
+  - 💡 Simple and efficient file access design
 
-### 技術棧感謝
+### Technology Stack Thanks
 
 - **[sentence-transformers](https://www.sbert.net/)** by Hugging Face
-  - all-MiniLM-L6-v2 嵌入模型
-  - 本地、免費、高質量
+  - all-MiniLM-L6-v2 embedding model
+  - Local, free, high-quality
 
 - **[Requesty.ai](https://requesty.ai/)**
-  - 多模型聚合平台
-  - 300+ 模型統一 API
+  - Multi-model aggregation platform
+  - 300+ models unified API
 
-- **[DuckDB](https://duckdb.org/)** - 嵌入式 SQL 資料庫
-- **[FAISS](https://github.com/facebookresearch/faiss)** (Meta) - 向量相似度搜索
-- **[FastAPI](https://fastapi.tiangolo.com/)** - 現代 Web 框架
-- **[Claude Code](https://www.anthropic.com/)** - MCP 協議與開發工具
+- **[DuckDB](https://duckdb.org/)** - Embedded SQL database
+- **[FAISS](https://github.com/facebookresearch/faiss)** (Meta) - Vector similarity search
+- **[FastAPI](https://fastapi.tiangolo.com/)** - Modern web framework
+- **[Claude Code](https://www.anthropic.com/)** - MCP protocol and development tools
 
 ---
 
-## 📝 文檔
+## 📝 Documentation
 
-### 用戶文檔 (可選安裝)
+### User Documentation (Optional)
 
 ```bash
-# docs/ 目錄包含完整文檔（已加入 .gitignore）
-# 如需閱讀，可在本地查看或在線生成
+# docs/ directory contains full documentation (added to .gitignore)
+# Read locally or generate online if needed
 ```
 
-- `docs/guides/` - 使用指南
+- `docs/guides/` - Usage guides
   - MCP Setup, Multi-Project, Vector Search, Cache, Memory, Tasks
-- `docs/features/` - 功能說明
-- `docs/core/` - 架構與技術概覽
-- `docs/bugfixes/` - Bug 修復記錄
+- `docs/features/` - Feature descriptions
+- `docs/core/` - Architecture and technical overview
+- `docs/bugfixes/` - Bug fix records
 
-### 開發者文檔 (內部參考)
+### Developer Documentation (Internal Reference)
 
-- `init/specs/` - 技術規格
-- `init/guidelines/` - 編碼標準、命名規範、文檔指引
-- `init/workflows/` - 發布、修復、功能開發流程
+- `init/specs/` - Technical specifications
+- `init/guidelines/` - Coding standards, naming conventions, documentation guide
+- `init/workflows/` - Release, bugfix, feature development workflows
 
-### 測試
+### Testing
 
 ```bash
-# 快速環境檢查
+# Quick environment check
 ./health_check.sh
 
-# 完整測試套件
+# Full test suite
 python tests/run_all_tests.py
 
-# 單獨測試
+# Individual tests
 python tests/test_high_priority_apis.py
 ```
 
-詳見 [TESTING.md](TESTING.md)
+See [TESTING.md](TESTING.md) for details
 
 ---
 
-## 🤝 貢獻
+## 🤝 Contributing
 
-歡迎貢獻！請遵循以下流程：
+Contributions welcome! Please follow this process:
 
-1. Fork 本倉庫
-2. 創建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交變更 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 開啟 Pull Request
+1. Fork this repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-詳見 `init/workflows/RELEASE_WORKFLOW.md` 和 `init/guidelines/CODING_STANDARDS.md`
-
----
-
-## 📄 授權
-
-本專案採用 MIT License - 詳見 [LICENSE](LICENSE) 文件
+See `init/workflows/RELEASE_WORKFLOW.md` and `init/guidelines/CODING_STANDARDS.md`
 
 ---
 
-## 🔗 相關連結
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+---
+
+## 🔗 Related Links
 
 - **Repository**: https://github.com/zoonderkins/augment-lite-mcp
 - **Issues**: https://github.com/zoonderkins/augment-lite-mcp/issues
@@ -942,10 +945,10 @@ python tests/test_high_priority_apis.py
 
 ---
 
-## 💬 社群與支援
+## 💬 Community & Support
 
-- GitHub Issues: 報告 bug 或功能請求
-- Discussions: 提問或分享使用經驗
+- GitHub Issues: Report bugs or feature requests
+- Discussions: Ask questions or share experiences
 
 ---
 
