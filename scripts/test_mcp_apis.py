@@ -19,6 +19,7 @@ from pathlib import Path
 # 添加專案根目錄到 path
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
+DATA_DIR = Path(os.getenv("AUGMENT_DB_DIR", BASE / "data"))
 
 def test_imports():
     """測試所有必要的導入"""
@@ -129,12 +130,14 @@ def test_bm25_index():
 
     try:
         build_script = BASE / "retrieval" / "build_index.py"
+        db_path = DATA_DIR / f"corpus_{project_name}.duckdb"
+        chunks_path = DATA_DIR / f"chunks_{project_name}.jsonl"
         cmd = [
             sys.executable,
             str(build_script),
             "--root", str(BASE),
-            "--db", f"data/corpus_{project_name}.duckdb",
-            "--chunks", f"data/chunks_{project_name}.jsonl",
+            "--db", str(db_path),
+            "--chunks", str(chunks_path),
         ]
 
         print(f"執行命令: {' '.join(cmd)}")
@@ -143,8 +146,8 @@ def test_bm25_index():
         if result.returncode == 0:
             print("✅ BM25 索引建立成功")
             # 檢查生成的文件
-            chunks_file = BASE / "data" / f"chunks_{project_name}.jsonl"
-            db_file = BASE / "data" / f"corpus_{project_name}.duckdb"
+            chunks_file = DATA_DIR / f"chunks_{project_name}.jsonl"
+            db_file = DATA_DIR / f"corpus_{project_name}.duckdb"
 
             if chunks_file.exists():
                 size = chunks_file.stat().st_size / 1024 / 1024
@@ -196,7 +199,7 @@ def test_vector_index():
         if result.returncode == 0:
             print("✅ 向量索引建立成功")
             # 檢查生成的文件
-            vector_file = BASE / "data" / f"vector_index_{project_name}.faiss"
+            vector_file = DATA_DIR / f"vector_index_{project_name}.faiss"
             if vector_file.exists():
                 size = vector_file.stat().st_size / 1024 / 1024
                 print(f"  向量索引文件: {vector_file} ({size:.2f} MB)")
@@ -351,7 +354,14 @@ def test_cache():
         # 測試快取 key 生成
         query = "test query"
         route = "small-fast"
-        key = make_key(query, route, project=project_name)
+        messages = [{"role": "user", "content": query}]
+        key = make_key(
+            model="test-model",
+            messages=messages,
+            extra={"route": route},
+            evidence_fingerprints=[],
+            project=project_name
+        )
         print(f"快取 key: {key}")
 
         # 測試寫入快取

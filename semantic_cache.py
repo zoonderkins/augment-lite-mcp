@@ -3,7 +3,7 @@ Semantic cache using vector similarity.
 
 Features:
 - Cache similar queries instead of exact matches
-- Uses sentence-transformers for query embeddings
+- Uses OpenRouter API (Qwen3-Embedding) or local sentence-transformers
 - FAISS for fast similarity search
 - Configurable similarity threshold
 - Multi-project support
@@ -23,29 +23,18 @@ logger = logging.getLogger(__name__)
 
 # Lazy imports
 _faiss = None
-_SentenceTransformer = None
 
-def _lazy_imports():
-    """Lazy import heavy dependencies."""
-    global _faiss, _SentenceTransformer
-    
+def _lazy_faiss():
+    """Lazy import FAISS."""
+    global _faiss
     if _faiss is None:
         try:
             import faiss
             _faiss = faiss
         except ImportError:
             logger.warning("faiss-cpu not installed. Semantic cache disabled.")
-            return None, None
-    
-    if _SentenceTransformer is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _SentenceTransformer = SentenceTransformer
-        except ImportError:
-            logger.warning("sentence-transformers not installed. Semantic cache disabled.")
-            return None, None
-    
-    return _faiss, _SentenceTransformer
+            return None
+    return _faiss
 
 import sys
 BASE = Path(__file__).resolve().parent
@@ -54,54 +43,51 @@ DATA_DIR = Path(os.getenv("AUGMENT_DB_DIR", BASE / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 from utils.project_utils import resolve_auto_project
-
-# Default embedding model (same as vector search)
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384 dimensions
+from retrieval.vector_search import EmbeddingProvider
 
 class SemanticCache:
     """
     Semantic cache using vector similarity.
-    
+
     Features:
     - Cache similar queries (not just exact matches)
+    - API embeddings via OpenRouter or local fallback
     - Configurable similarity threshold
     - Automatic expiration
     - Multi-project support
     """
-    
+
     def __init__(
         self,
         project: str = None,
-        model_name: str = DEFAULT_MODEL,
-        dimension: int = 384,
-        similarity_threshold: float = 0.95
+        similarity_threshold: float = 0.95,
+        use_api: bool = True
     ):
         """
         Initialize semantic cache.
-        
+
         Args:
             project: Project name (None for global)
-            model_name: Sentence-transformers model name
-            dimension: Embedding dimension
             similarity_threshold: Minimum similarity score (0-1) to consider a cache hit
+            use_api: Use API embeddings (True) or local model (False)
         """
         self.project = project or ""
-        self.model_name = model_name
-        self.dimension = dimension
         self.similarity_threshold = similarity_threshold
-        
-        # Lazy load dependencies
-        faiss, SentenceTransformer = _lazy_imports()
-        if faiss is None or SentenceTransformer is None:
+
+        # Check FAISS dependency
+        faiss = _lazy_faiss()
+        if faiss is None:
             self.enabled = False
-            logger.warning("Semantic cache disabled (missing dependencies)")
+            logger.warning("Semantic cache disabled (FAISS not installed)")
             return
-        
+
         self.enabled = True
-        
-        # Load embedding model
-        logger.info(f"Loading semantic cache model: {model_name}")
-        self.model = SentenceTransformer(model_name)
+
+        # Initialize embedding provider (shared with vector search)
+        self.embedding_provider = EmbeddingProvider(use_api=use_api)
+        self.dimension = self.embedding_provider.dimension
+
+        logger.info(f"Semantic cache initialized: {'API' if self.embedding_provider.use_api else 'local'} mode, dim={self.dimension}")
         
         # Initialize FAISS index
         self.index = None
@@ -132,7 +118,7 @@ class SemanticCache:
         
         if cache_path.exists() and entries_path.exists():
             try:
-                faiss, _ = _lazy_imports()
+                faiss = _lazy_faiss()
                 self.index = faiss.read_index(str(cache_path))
                 with open(entries_path, "rb") as f:
                     self.cache_entries = pickle.load(f)
@@ -158,7 +144,7 @@ class SemanticCache:
         entries_path = self._get_entries_path()
         
         try:
-            faiss, _ = _lazy_imports()
+            faiss = _lazy_faiss()
             faiss.write_index(self.index, str(cache_path))
             with open(entries_path, "wb") as f:
                 pickle.dump(self.cache_entries, f)
@@ -187,13 +173,12 @@ class SemanticCache:
             # Rebuild index with valid entries only
             if valid_entries:
                 queries = [entry[0] for entry in valid_entries]
-                embeddings = self.model.encode(
+                embeddings = self.embedding_provider.encode(
                     queries,
-                    convert_to_numpy=True,
-                    normalize_embeddings=True
+                    normalize=True
                 )
                 
-                faiss, _ = _lazy_imports()
+                faiss = _lazy_faiss()
                 self.index = faiss.IndexFlatIP(self.dimension)
                 self.index.add(embeddings.astype(np.float32))
             else:
@@ -221,12 +206,11 @@ class SemanticCache:
             return None
         
         # Generate query embedding
-        query_embedding = self.model.encode(
+        query_embedding = self.embedding_provider.encode(
             [query],
-            convert_to_numpy=True,
-            normalize_embeddings=True
+            normalize=True
         )
-        
+
         # Search for similar queries
         scores, indices = self.index.search(query_embedding.astype(np.float32), 1)
         
@@ -273,14 +257,13 @@ class SemanticCache:
         expire_at = int(time.time()) + ttl_sec
         
         # Generate query embedding
-        query_embedding = self.model.encode(
+        query_embedding = self.embedding_provider.encode(
             [query],
-            convert_to_numpy=True,
-            normalize_embeddings=True
+            normalize=True
         )
-        
+
         # Add to index
-        faiss, _ = _lazy_imports()
+        faiss = _lazy_faiss()
         if self.index is None:
             self.index = faiss.IndexFlatIP(self.dimension)
         

@@ -22,8 +22,13 @@ import logging
 from pathlib import Path
 
 # Add parent directory to path
+import os
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
+
+# Load .env file for API keys
+from dotenv import load_dotenv
+load_dotenv(BASE / ".env")
 
 from retrieval.vector_search import VectorSearchEngine
 from utils.project_utils import resolve_auto_project
@@ -34,7 +39,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DATA_DIR = BASE / "data"
+DATA_DIR = Path(os.getenv("AUGMENT_DB_DIR", BASE / "data"))
 
 def load_chunks(project: str = None) -> list:
     """

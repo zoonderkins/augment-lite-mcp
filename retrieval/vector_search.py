@@ -1,8 +1,9 @@
 """
-Vector search using FAISS and sentence-transformers.
+Vector search using FAISS and OpenRouter API / sentence-transformers.
 
 Features:
-- Dense vector embeddings using sentence-transformers
+- API embeddings via OpenRouter (Qwen3-Embedding-4B) - recommended
+- Fallback to local sentence-transformers
 - FAISS index for efficient similarity search
 - Multi-project support
 - Automatic index building and caching
@@ -13,38 +14,13 @@ import sys
 import json
 import pickle
 import logging
+import yaml
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
-
-# Lazy imports to avoid startup overhead
-_faiss = None
-_SentenceTransformer = None
-
-def _lazy_imports():
-    """Lazy import heavy dependencies."""
-    global _faiss, _SentenceTransformer
-    
-    if _faiss is None:
-        try:
-            import faiss
-            _faiss = faiss
-        except ImportError:
-            logger.error("faiss-cpu not installed. Run: uv pip install faiss-cpu")
-            raise
-    
-    if _SentenceTransformer is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _SentenceTransformer = SentenceTransformer
-        except ImportError:
-            logger.error("sentence-transformers not installed. Run: uv pip install sentence-transformers")
-            raise
-    
-    return _faiss, _SentenceTransformer
 
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
@@ -53,44 +29,229 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 from utils.project_utils import resolve_auto_project
 
-# Default embedding model
+# Lazy imports to avoid startup overhead
+_faiss = None
+_SentenceTransformer = None
+_openai_client = None
+_embedding_config = None
+
+def _load_embedding_config() -> Dict:
+    """Load embedding configuration from models.yaml."""
+    global _embedding_config
+    if _embedding_config is not None:
+        return _embedding_config
+
+    config_path = BASE / "config" / "models.yaml"
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            _embedding_config = config.get("embedding", {})
+    else:
+        _embedding_config = {}
+
+    return _embedding_config
+
+def _get_openai_client():
+    """Get OpenAI client for API embeddings."""
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client
+
+    try:
+        from openai import OpenAI
+        config = _load_embedding_config()
+        api_key_env = config.get("api_key_env", "OPENROUTER_API_KEY")
+        api_key = os.getenv(api_key_env)
+
+        if not api_key:
+            logger.warning(f"API key not found: {api_key_env}. Falling back to local model.")
+            return None
+
+        base_url = config.get("base_url", "https://openrouter.ai/api/v1")
+        _openai_client = OpenAI(api_key=api_key, base_url=base_url)
+        return _openai_client
+    except ImportError:
+        logger.warning("openai package not installed. Run: uv pip install openai")
+        return None
+
+def _lazy_faiss():
+    """Lazy import FAISS."""
+    global _faiss
+    if _faiss is None:
+        try:
+            import faiss
+            _faiss = faiss
+        except ImportError:
+            logger.error("faiss-cpu not installed. Run: uv pip install faiss-cpu")
+            raise
+    return _faiss
+
+def _lazy_sentence_transformer():
+    """Lazy import sentence-transformers."""
+    global _SentenceTransformer
+    if _SentenceTransformer is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _SentenceTransformer = SentenceTransformer
+        except ImportError:
+            logger.error("sentence-transformers not installed. Run: uv pip install sentence-transformers")
+            raise
+    return _SentenceTransformer
+
+# Default embedding model (fallback)
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384 dimensions, fast
+
+
+class EmbeddingProvider:
+    """Unified embedding provider supporting API and local models."""
+
+    def __init__(self, use_api: bool = True):
+        """
+        Initialize embedding provider.
+
+        Args:
+            use_api: Whether to use API (True) or local model (False)
+        """
+        self.config = _load_embedding_config()
+        self.use_api = use_api and bool(self.config.get("provider"))
+        self._local_model = None
+
+        if self.use_api:
+            self.client = _get_openai_client()
+            if self.client is None:
+                logger.info("API client unavailable, falling back to local model")
+                self.use_api = False
+
+        if not self.use_api:
+            self._init_local_model()
+
+    def _init_local_model(self):
+        """Initialize local sentence-transformer model."""
+        SentenceTransformer = _lazy_sentence_transformer()
+        fallback_model = self.config.get("fallback_local", DEFAULT_MODEL)
+        logger.info(f"Loading local embedding model: {fallback_model}")
+        self._local_model = SentenceTransformer(fallback_model)
+
+    @property
+    def dimension(self) -> int:
+        """Get embedding dimension."""
+        if self.use_api:
+            return self.config.get("dimension", 1024)
+        return self.config.get("fallback_dimension", 384)
+
+    def encode(
+        self,
+        texts: List[str],
+        show_progress_bar: bool = False,
+        normalize: bool = True
+    ) -> np.ndarray:
+        """
+        Generate embeddings for texts.
+
+        Args:
+            texts: List of texts to embed
+            show_progress_bar: Show progress (only for local model)
+            normalize: L2 normalize embeddings
+
+        Returns:
+            numpy array of embeddings (N x dimension)
+        """
+        if not texts:
+            return np.array([])
+
+        if self.use_api:
+            return self._encode_api(texts, normalize)
+        else:
+            return self._encode_local(texts, show_progress_bar, normalize)
+
+    def _encode_api(self, texts: List[str], normalize: bool = True) -> np.ndarray:
+        """Encode using OpenRouter API."""
+        config = self.config
+        model_id = config.get("model_id", "qwen/qwen3-embedding-4b")
+        batch_size = config.get("batch_size", 10)
+
+        all_embeddings = []
+
+        # Process in batches
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            try:
+                response = self.client.embeddings.create(
+                    model=model_id,
+                    input=batch
+                )
+                batch_embeddings = [item.embedding for item in response.data]
+                all_embeddings.extend(batch_embeddings)
+
+                if len(texts) > batch_size:
+                    logger.info(f"Embedded {min(i + batch_size, len(texts))}/{len(texts)} texts")
+
+            except Exception as e:
+                logger.error(f"API embedding failed: {e}")
+                # Fallback to local for this batch
+                if self._local_model is None:
+                    self._init_local_model()
+                local_emb = self._local_model.encode(
+                    batch,
+                    convert_to_numpy=True,
+                    normalize_embeddings=normalize
+                )
+                all_embeddings.extend(local_emb.tolist())
+
+        embeddings = np.array(all_embeddings, dtype=np.float32)
+
+        if normalize:
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms[norms == 0] = 1
+            embeddings = embeddings / norms
+
+        return embeddings
+
+    def _encode_local(
+        self,
+        texts: List[str],
+        show_progress_bar: bool = False,
+        normalize: bool = True
+    ) -> np.ndarray:
+        """Encode using local sentence-transformers."""
+        return self._local_model.encode(
+            texts,
+            show_progress_bar=show_progress_bar,
+            convert_to_numpy=True,
+            normalize_embeddings=normalize
+        )
+
 
 class VectorSearchEngine:
     """
     Vector search engine using FAISS.
-    
+
     Features:
-    - Automatic embedding generation
+    - API embeddings via OpenRouter (default) or local sentence-transformers
     - FAISS index for fast similarity search
     - Multi-project support
     - Index caching
     """
-    
+
     def __init__(
         self,
         project: str = None,
-        model_name: str = DEFAULT_MODEL,
-        dimension: int = 384
+        use_api: bool = True
     ):
         """
         Initialize vector search engine.
-        
+
         Args:
             project: Project name (None for global)
-            model_name: Sentence-transformers model name
-            dimension: Embedding dimension
+            use_api: Use API embeddings (True) or local model (False)
         """
         self.project = project or ""
-        self.model_name = model_name
-        self.dimension = dimension
-        
-        # Lazy load dependencies
-        faiss, SentenceTransformer = _lazy_imports()
-        
-        # Load embedding model
-        logger.info(f"Loading embedding model: {model_name}")
-        self.model = SentenceTransformer(model_name)
+
+        # Initialize embedding provider
+        self.embedding_provider = EmbeddingProvider(use_api=use_api)
+        self.dimension = self.embedding_provider.dimension
+
+        logger.info(f"Vector search initialized: {'API' if self.embedding_provider.use_api else 'local'} mode, dim={self.dimension}")
         
         # Initialize FAISS index
         self.index = None
@@ -118,7 +279,7 @@ class VectorSearchEngine:
         
         if index_path.exists() and chunks_path.exists():
             try:
-                faiss, _ = _lazy_imports()
+                faiss = _lazy_faiss()
                 self.index = faiss.read_index(str(index_path))
                 with open(chunks_path, "rb") as f:
                     self.chunks = pickle.load(f)
@@ -140,7 +301,7 @@ class VectorSearchEngine:
         chunks_path = self._get_chunks_path()
         
         try:
-            faiss, _ = _lazy_imports()
+            faiss = _lazy_faiss()
             faiss.write_index(self.index, str(index_path))
             with open(chunks_path, "wb") as f:
                 pickle.dump(self.chunks, f)
@@ -163,21 +324,23 @@ class VectorSearchEngine:
             return
         
         logger.info(f"Building vector index for {len(chunks)} chunks...")
-        
-        # Extract texts
-        texts = [chunk["text"] for chunk in chunks]
+
+        # Extract texts (filter invalid chunks)
+        valid_chunks = [c for c in chunks if c.get("text")]
+        if len(valid_chunks) < len(chunks):
+            logger.warning(f"Filtered {len(chunks) - len(valid_chunks)} invalid chunks")
+        texts = [chunk["text"] for chunk in valid_chunks]
         
         # Generate embeddings
         logger.info("Generating embeddings...")
-        embeddings = self.model.encode(
+        embeddings = self.embedding_provider.encode(
             texts,
             show_progress_bar=True,
-            convert_to_numpy=True,
-            normalize_embeddings=True  # L2 normalization for cosine similarity
+            normalize=True
         )
         
         # Create FAISS index
-        faiss, _ = _lazy_imports()
+        faiss = _lazy_faiss()
         
         # Use IndexFlatIP for cosine similarity (with normalized vectors)
         self.index = faiss.IndexFlatIP(self.dimension)
@@ -213,10 +376,9 @@ class VectorSearchEngine:
             return []
         
         # Generate query embedding
-        query_embedding = self.model.encode(
+        query_embedding = self.embedding_provider.encode(
             [query],
-            convert_to_numpy=True,
-            normalize_embeddings=True
+            normalize=True
         )
         
         # Search FAISS index
@@ -247,21 +409,23 @@ class VectorSearchEngine:
         """
         if not new_chunks:
             return
-        
-        # Extract texts
-        texts = [chunk["text"] for chunk in new_chunks]
+
+        # Extract texts (filter invalid chunks)
+        valid_chunks = [c for c in new_chunks if c.get("text")]
+        if not valid_chunks:
+            return
+        texts = [chunk["text"] for chunk in valid_chunks]
         
         # Generate embeddings
-        embeddings = self.model.encode(
+        embeddings = self.embedding_provider.encode(
             texts,
             show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True
+            normalize=True
         )
         
         # Add to index
         if self.index is None:
-            faiss, _ = _lazy_imports()
+            faiss = _lazy_faiss()
             self.index = faiss.IndexFlatIP(self.dimension)
         
         self.index.add(embeddings.astype(np.float32))

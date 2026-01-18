@@ -240,7 +240,10 @@ uv pip install -r requirements.txt
 
 # 3. 配置 API Keys
 cp .env.example .env
-# 編輯 .env 填入 GLM_API_KEY 和 MINIMAX_API_KEY
+# 編輯 .env 填入必需的 API Keys:
+#   - GLM_API_KEY (從 z.ai 獲取)
+#   - MINIMAX_API_KEY (從 minimax.io 獲取)
+#   - OPENROUTER_API_KEY (從 openrouter.ai/keys 獲取) - 用於 Embedding
 
 # 4. (可選) 安裝向量搜索依賴 (~2GB)
 bash scripts/install_vector_deps.sh
@@ -259,6 +262,7 @@ claude mcp add --scope user --transport stdio augment-lite \
   --env AUGMENT_DB_DIR="$HOME/augment-lite-mcp/data" \
   --env GLM_API_KEY="your-glm-api-key" \
   --env MINIMAX_API_KEY="your-minimax-api-key" \
+  --env OPENROUTER_API_KEY="your-openrouter-api-key" \
 -- "$HOME/augment-lite-mcp/.venv/bin/python" \
      "-u" "$HOME/augment-lite-mcp/mcp_bridge_lazy.py"
 ```
@@ -277,7 +281,8 @@ claude mcp add --scope user --transport stdio augment-lite \
       "env": {
         "AUGMENT_DB_DIR": "/absolute/path/to/data",
         "GLM_API_KEY": "your-glm-api-key",
-        "MINIMAX_API_KEY": "your-minimax-api-key"
+        "MINIMAX_API_KEY": "your-minimax-api-key",
+        "OPENROUTER_API_KEY": "your-openrouter-api-key"
       }
     }
   }
@@ -291,6 +296,9 @@ claude mcp add --scope user --transport stdio augment-lite \
 | `AUGMENT_DB_DIR` | ✅ | 數據目錄（索引、快取、記憶） |
 | `GLM_API_KEY` | ✅ | GLM-4.7 原廠 API Key (從 z.ai 獲取) |
 | `MINIMAX_API_KEY` | ✅ | MiniMax-M2.1 原廠 API Key (從 minimax.io 獲取) |
+| `OPENROUTER_API_KEY` | ✅ | OpenRouter API Key (從 openrouter.ai/keys 獲取) - 用於 Embedding |
+
+> **Embedding 說明**: 使用 OpenRouter 調用 `qwen/qwen3-embedding-4b` (2560 維)。若未設定 `OPENROUTER_API_KEY`，自動 fallback 到本地 `all-MiniLM-L6-v2` (384 維)。
 
 #### 方式 3: 本地代理模式 (可選)
 
@@ -621,8 +629,9 @@ claude mcp add-json auggie-mcp --scope user '{"type":"stdio","command":"auggie",
 └────┬─────┘  └─────────┘
      │
 ┌────▼─────────────────────────────────┐
-│  Layer 1: Local Embeddings           │
-│  - sentence-transformers (PyTorch)   │
+│  Layer 1: API/Local Embeddings       │
+│  - OpenRouter: qwen3-embedding-4b    │
+│  - Fallback: sentence-transformers   │
 │  - BM25 + FAISS hybrid search        │
 │  - 50 candidates                     │
 └────┬─────────────────────────────────┘

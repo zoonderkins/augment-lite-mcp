@@ -186,6 +186,7 @@ def generate_accumulated_answer(
     from tokenizer import estimate_tokens_from_messages
     from cache import make_key, get as cache_get, set as cache_set
     from guardrails.abstain import should_abstain, get_abstain_reason
+    from retrieval.search import evidence_fingerprints_for_hits
 
     # 1. Accumulated search
     search_result = accumulated_search(
@@ -236,10 +237,12 @@ def generate_accumulated_answer(
     max_output_tokens = route_config["max_output_tokens"]
 
     # 5. Cache check
+    ev_fp = evidence_fingerprints_for_hits(top_hits)
     key = make_key(
         model=model_alias,
         messages=messages,
         extra={"temperature": temperature, "accumulated": True},
+        evidence_fingerprints=ev_fp,
         project=project
     )
     cached = cache_get(key)
