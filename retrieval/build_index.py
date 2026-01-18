@@ -2,7 +2,72 @@ import os, argparse, duckdb, pathlib, re, json
 from pathlib import Path
 from typing import List, Dict, Optional, Callable
 
-TEXT_EXTS = {".md",".txt",".rst",".py",".go",".js",".ts",".tsx",".java",".kt",".c",".cpp",".h",".hpp",".cs",".rb",".php",".sh",".yaml",".yml",".toml",".ini",".json"}
+# Code file extensions (use line-based chunking)
+# Source: https://github.com/bigcode-project/bigcode-dataset
+CODE_EXTS = {
+    # Python
+    ".py", ".pyw", ".pyi", ".pyx",
+    # JavaScript/TypeScript
+    ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+    # Go
+    ".go",
+    # Rust
+    ".rs",
+    # Java/Kotlin/Scala
+    ".java", ".kt", ".kts", ".scala", ".sbt",
+    # C/C++
+    ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hxx", ".hh",
+    # C#
+    ".cs", ".csx",
+    # Ruby
+    ".rb", ".rake", ".gemspec",
+    # PHP
+    ".php",
+    # Shell/Bash
+    ".sh", ".bash", ".zsh", ".fish",
+    # Swift/Objective-C
+    ".swift", ".m", ".mm",
+    # Lua
+    ".lua",
+    # Perl
+    ".pl", ".pm",
+    # R
+    ".r", ".R",
+    # Julia
+    ".jl",
+    # Elixir/Erlang
+    ".ex", ".exs", ".erl",
+    # Haskell
+    ".hs",
+    # Clojure
+    ".clj", ".cljs", ".cljc",
+    # SQL
+    ".sql",
+    # Config files
+    ".yaml", ".yml", ".toml", ".ini", ".json", ".jsonc",
+    # Web
+    ".css", ".scss", ".sass", ".less",
+    # Other
+    ".vue", ".svelte", ".astro",
+    ".graphql", ".gql",
+    ".proto",
+    ".tf", ".hcl",  # Terraform/HCL
+    ".dockerfile", ".containerfile",
+}
+
+# Documentation file extensions (use token-based chunking)
+DOC_EXTS = {
+    ".md", ".markdown", ".mkd",
+    ".txt",
+    ".rst", ".rest",
+    ".html", ".htm",
+    ".adoc", ".asciidoc",
+    ".org",
+    ".tex",
+}
+
+# All supported text extensions
+TEXT_EXTS = CODE_EXTS | DOC_EXTS
 
 # Common directories to ignore (similar to .gitignore)
 IGNORE_DIRS = {
@@ -92,13 +157,15 @@ def should_skip_file(file_path: Path) -> bool:
 
 def parse_file_with_tree_sitter(file_path: Path, project_root: Path) -> List[Dict]:
     """
-    Parse a file and return chunks.
+    Parse a file and return chunks with metadata.
 
-    Note: Currently uses simple text chunking.
-    Tree-sitter integration planned for v1.3.0.
+    Uses different chunking strategies based on file type:
+    - Code files: line-based chunking (50 lines, 10 overlap)
+    - Doc files: token-based chunking (256 tokens, 32 overlap)
 
     Returns:
-        List of chunks: [{"text": "...", "source": "file:line"}, ...]
+        List of chunks with metadata:
+        [{"text": "...", "source": "file:line", "chunking_method": "lines|tokens", "filetype": "py|md|..."}, ...]
     """
     content = read_text(file_path)
     if not content:
@@ -110,25 +177,83 @@ def parse_file_with_tree_sitter(file_path: Path, project_root: Path) -> List[Dic
     except ValueError:
         rel_path = str(file_path)
 
-    # Simple line-based chunking with context
-    lines = content.split('\n')
-    chunk_size = 50  # lines per chunk
-    overlap = 10     # overlap lines
+    ext = file_path.suffix.lower()
+    filetype = ext.lstrip(".")
 
-    i = 0
-    while i < len(lines):
-        chunk_lines = lines[i:i + chunk_size]
-        chunk_text = '\n'.join(chunk_lines)
+    # Choose chunking method based on file type
+    if ext in DOC_EXTS:
+        # Token-based chunking for documentation
+        chunking_method = "tokens"
+        for i, chunk_text in enumerate(chunk_text_by_tokens(content, size=256, overlap=32)):
+            if chunk_text.strip():
+                chunks.append({
+                    "text": chunk_text,
+                    "source": f"{rel_path}:chunk{i + 1}",
+                    "chunking_method": chunking_method,
+                    "filetype": filetype
+                })
+    else:
+        # Line-based chunking for code files
+        chunking_method = "lines"
+        lines = content.split('\n')
+        chunk_size = 50  # lines per chunk
+        overlap = 10     # overlap lines
 
-        if chunk_text.strip():
-            chunks.append({
-                "text": chunk_text,
-                "source": f"{rel_path}:{i + 1}"
-            })
+        i = 0
+        chunk_idx = 0
+        while i < len(lines):
+            chunk_lines = lines[i:i + chunk_size]
+            chunk_text = '\n'.join(chunk_lines)
 
-        i += max(1, chunk_size - overlap)
+            if chunk_text.strip():
+                chunks.append({
+                    "text": chunk_text,
+                    "source": f"{rel_path}:{i + 1}",
+                    "chunking_method": chunking_method,
+                    "filetype": filetype
+                })
+                chunk_idx += 1
+
+            i += max(1, chunk_size - overlap)
 
     return chunks
+
+
+def _simple_tokenize(text: str) -> List[str]:
+    """
+    Simple tokenizer that handles CJK characters, English words, and symbols.
+
+    - CJK characters (Chinese, Japanese, Korean) are treated as individual tokens
+    - English words and numbers are kept as single tokens
+    - Symbols are individual tokens
+
+    This avoids the problem where text.split() treats entire Chinese paragraphs as one token.
+    """
+    # Match: CJK chars | Japanese Hiragana/Katakana | Korean | Words/Numbers | Other non-whitespace
+    pattern = r"[\u4e00-\u9fff]|[\u3040-\u30ff]|[\uac00-\ud7af]|[A-Za-z0-9_]+|[^\s\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]"
+    return re.findall(pattern, text)
+
+
+def chunk_text_by_tokens(text: str, size: int = 256, overlap: int = 32):
+    """
+    Chunk text by tokens with CJK support.
+
+    Args:
+        text: Input text
+        size: Tokens per chunk
+        overlap: Overlap tokens
+
+    Yields:
+        Chunk strings
+    """
+    tokens = _simple_tokenize(text)
+    step = max(1, size - overlap)
+    for i in range(0, len(tokens), step):
+        chunk = tokens[i:i + size]
+        if chunk:
+            # Join with space, but CJK chars don't need space between them
+            # Simple approach: join all with space (acceptable for embedding)
+            yield " ".join(chunk)
 
 
 def should_ignore_path(p: Path) -> bool:

@@ -200,6 +200,23 @@ class EmbeddingProvider:
 
         embeddings = np.array(all_embeddings, dtype=np.float32)
 
+        # Ensure 2D shape: (N, D) - handle single vector (D,) case
+        if embeddings.ndim == 1:
+            embeddings = embeddings.reshape(1, -1)
+        elif embeddings.ndim != 2:
+            raise ValueError(f"Unexpected embedding shape: {embeddings.shape}. Expected 1D or 2D array.")
+
+        # Dimension assertion - guard against API returning unexpected dims
+        expected_dim = self.config.get("dimension", 2560)
+        actual_dim = embeddings.shape[1] if embeddings.size > 0 else 0
+        if actual_dim > 0 and actual_dim != expected_dim:
+            logger.warning(
+                f"⚠️ Dimension mismatch! Expected {expected_dim}, got {actual_dim}. "
+                f"Update config/models.yaml embedding.dimension to {actual_dim}"
+            )
+        elif actual_dim > 0:
+            logger.debug(f"Embedding dimension verified: {actual_dim}")
+
         if normalize:
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
             norms[norms == 0] = 1
@@ -338,10 +355,18 @@ class VectorSearchEngine:
             show_progress_bar=True,
             normalize=True
         )
-        
+
+        # Fail-fast dimension check before FAISS index creation
+        actual_dim = embeddings.shape[1] if len(embeddings.shape) > 1 else 0
+        if actual_dim > 0 and actual_dim != self.dimension:
+            raise ValueError(
+                f"Embedding dimension mismatch: expected {self.dimension}, got {actual_dim}. "
+                f"Update config/models.yaml embedding.dimension to {actual_dim} and rebuild index."
+            )
+
         # Create FAISS index
         faiss = _lazy_faiss()
-        
+
         # Use IndexFlatIP for cosine similarity (with normalized vectors)
         self.index = faiss.IndexFlatIP(self.dimension)
         self.index.add(embeddings.astype(np.float32))

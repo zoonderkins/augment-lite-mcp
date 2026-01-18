@@ -1,6 +1,8 @@
 # --- add at top ---
+import os
 from pathlib import Path
 BASE = Path(__file__).resolve().parents[1]
+DATA_DIR = Path(os.getenv("AUGMENT_DB_DIR", BASE / "data"))
 # -------------------
 import json, hashlib, re, sys, logging
 from pathlib import Path
@@ -34,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 def _get_active_chunks_path():
     """Get the active project's chunks path, or fallback to default."""
-    projects_config = BASE / "data" / "projects.json"
+    projects_config = DATA_DIR / "projects.json"
 
     # Try to load active project
     if projects_config.exists():
@@ -43,14 +45,14 @@ def _get_active_chunks_path():
                 projects = json.load(f)
                 for name, config in projects.items():
                     if config.get("active", False):
-                        chunks_path = BASE / config["chunks"]
+                        chunks_path = DATA_DIR / f"chunks_{name}.jsonl"
                         if chunks_path.exists():
                             return chunks_path
         except Exception:
             pass
 
     # Fallback to default path
-    return BASE / "data" / "chunks.jsonl"
+    return DATA_DIR / "chunks.jsonl"
 
 
 def _load_chunks(path=None):
@@ -102,7 +104,11 @@ def bm25_search(query: str, k: int = 8) -> List[Dict]:
     out = []
     for idx, sc in pairs[:max(1, k * 3)]:
         rec = chunks[idx]
-        out.append({"text": rec["text"], "source": rec["path"], "score": float(sc)})
+        out.append({
+            "text": rec.get("text", ""),
+            "source": rec.get("path", "unknown"),
+            "score": float(sc)
+        })
 
     # Deduplicate by path
     by_path = {}
@@ -163,15 +169,15 @@ def hybrid_search(
     Returns:
         List of dicts with 'text', 'source', and 'score' fields
     """
-    # Get BM25 results
-    bm25_results = bm25_search(query, k=k * 2)
+    # Get BM25 results (k×3 for larger candidate pool before rerank)
+    bm25_results = bm25_search(query, k=k * 3)
 
-    # Get vector results if available
+    # Get vector results if available (k×3 for larger candidate pool)
     vector_results = []
     if use_vector:
         VectorSearchEngine = _lazy_vector_search()
         if VectorSearchEngine is not None:
-            vector_results = vector_search(query, k=k * 2, project=project)
+            vector_results = vector_search(query, k=k * 3, project=project)
 
     # If no vector results, return BM25 only
     if not vector_results:
@@ -231,7 +237,26 @@ def hybrid_search(
     # Sort by final score
     results.sort(key=lambda x: x["score"], reverse=True)
 
-    return results[:k]
+    # Same-file deduplication: keep top N chunks per file (avoid all results from one file)
+    # Source format: "path/to/file.py:123" or "path/to/file.md:chunk5"
+    per_file_limit = 2  # Keep up to 2 chunks per file for better recall
+    file_counts = {}
+    deduped_results = []
+
+    for r in results:
+        source = r["source"]
+        # Safe extraction: match ":line_number" or ":chunkN" at end
+        # Handles Windows paths (C:\...), URLs, repo:branch formats safely
+        if re.search(r":(?:chunk)?\d+$", source):
+            file_key = source.rsplit(":", 1)[0]
+        else:
+            file_key = source
+
+        file_counts[file_key] = file_counts.get(file_key, 0) + 1
+        if file_counts[file_key] <= per_file_limit:
+            deduped_results.append(r)
+
+    return deduped_results[:k]
 
 def evidence_fingerprints_for_hits(hits: List[Dict]):
     fps = []
