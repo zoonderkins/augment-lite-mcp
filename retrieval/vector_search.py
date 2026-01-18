@@ -210,8 +210,11 @@ class EmbeddingProvider:
         expected_dim = self.config.get("dimension", 2560)
         actual_dim = embeddings.shape[1] if embeddings.size > 0 else 0
         if actual_dim > 0 and actual_dim != expected_dim:
+            provider = self.config.get("provider", "unknown")
+            model_id = self.config.get("model_id", "unknown")
             logger.warning(
-                f"⚠️ Dimension mismatch! Expected {expected_dim}, got {actual_dim}. "
+                f"⚠️ Dimension mismatch! provider={provider} model={model_id} "
+                f"expected={expected_dim} got={actual_dim}. "
                 f"Update config/models.yaml embedding.dimension to {actual_dim}"
             )
         elif actual_dim > 0:
@@ -361,7 +364,8 @@ class VectorSearchEngine:
         if actual_dim > 0 and actual_dim != self.dimension:
             raise ValueError(
                 f"Embedding dimension mismatch: expected {self.dimension}, got {actual_dim}. "
-                f"Update config/models.yaml embedding.dimension to {actual_dim} and rebuild index."
+                f"Fix: Update config/models.yaml embedding.dimension to {actual_dim}, "
+                f"then run: ./scripts/manage.sh rebuild <project>"
             )
 
         # Create FAISS index

@@ -24,6 +24,51 @@ augment-lite-mcp 是一個**零維護、本地優先**的 AI 代碼助手引擎�
 - **💰 Cost Effective**: 本地 BM25+Vector 優先，LLM 僅用於精篩
 - **🎯 Hybrid Search**: BM25 關鍵字 + 向量語義雙重匹配
 
+### 🏗️ 系統架構
+
+```mermaid
+flowchart LR
+    subgraph Client["🖥️ Client"]
+        CC["Claude Code<br/>IDE"]
+    end
+
+    subgraph MCP["📡 MCP Server"]
+        direction TB
+        API["31 MCP Tools"]
+        API --> RAG["RAG Engine"]
+        API --> Code["Code Analysis<br/>(Tree-sitter)"]
+        API --> Mem["Memory<br/>& Tasks"]
+    end
+
+    subgraph Index["📊 Index Layer"]
+        direction TB
+        BM25["BM25<br/>DuckDB FTS"]
+        Vec["Vector<br/>FAISS 2560d"]
+        Chunk["Chunks<br/>JSONL"]
+    end
+
+    subgraph LLM["🤖 LLM Layer"]
+        direction TB
+        GLM["GLM-4.7<br/>(reason)"]
+        MM["MiniMax-M2.1<br/>(fast)"]
+        Emb["Qwen3-Embed<br/>(OpenRouter)"]
+    end
+
+    CC <-->|"MCP Protocol"| API
+    RAG --> BM25
+    RAG --> Vec
+    RAG --> GLM
+    RAG --> MM
+    Vec --> Emb
+    BM25 --> Chunk
+    Vec --> Chunk
+
+    style CC fill:#e3f2fd
+    style API fill:#fff3e0
+    style RAG fill:#e8f5e9
+    style Vec fill:#fce4ec
+```
+
 ---
 
 ## ✨ 核心特性
@@ -47,15 +92,16 @@ augment-lite-mcp 是一個**零維護、本地優先**的 AI 代碼助手引擎�
 **本地向量 + 遠端 LLM 智能過濾**
 
 ```
-Layer 1: 本地 PyTorch 嵌入 (sentence-transformers)
-  → BM25 + Vector 混合搜索
-  → 50 個候選結果
-  → 模型: all-MiniLM-L6-v2 (384 dims, 90MB)
+Layer 1: 向量嵌入 (OpenRouter API / 本地 fallback)
+  → BM25 + Vector 混合搜索 (k×3 over-fetch)
+  → ~50 個候選結果 → 同檔去重 → ~35 候選
+  → 模型: qwen/qwen3-embedding-4b (2560 dims, API)
+  → Fallback: all-MiniLM-L6-v2 (384 dims, 本地)
 
 Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
-  → 語義理解 + 去重
-  → 最終 8 個高質量結果
-  → 使用原廠 Anthropic 格式 API
+  → 語義理解 + Re-rank
+  → 最終 Top-K 高質量結果
+  → 使用 OpenAI 兼容格式 API
 ```
 
 **優勢**:
@@ -67,37 +113,23 @@ Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
 
 #### BM25 + Vector 技術細節
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      查詢: "認證模組"                        │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-          ┌───────────────┴───────────────┐
-          ▼                               ▼
-┌─────────────────┐              ┌─────────────────┐
-│     BM25        │              │     Vector      │
-│  (DuckDB FTS)   │              │  (FAISS+SBERT)  │
-│                 │              │                 │
-│ 關鍵字匹配:     │              │ 語義相似度:     │
-│ "認證" → 0.8   │              │ embedding距離   │
-│ "模組" → 0.6   │              │ cosine sim      │
-└────────┬────────┘              └────────┬────────┘
-         │ k*2 結果                       │ k*2 結果
-         └───────────────┬────────────────┘
-                         ▼
-              ┌─────────────────────┐
-              │   Hybrid Merge      │
-              │                     │
-              │ score = bm25_w * s1 │
-              │       + vec_w * s2  │
-              │                     │
-              │ (默認各 0.5)        │
-              └──────────┬──────────┘
-                         │
-                         ▼
-              ┌─────────────────────┐
-              │   返回 Top-K 結果   │
-              └─────────────────────┘
+```mermaid
+flowchart TB
+    Q["🔍 查詢: 認證模組"]
+
+    Q --> BM25["<b>BM25</b><br/>DuckDB FTS<br/>關鍵字匹配"]
+    Q --> Vector["<b>Vector</b><br/>FAISS + Qwen3-Embedding<br/>語義相似度 (2560 dims)"]
+
+    BM25 -->|"k×3 結果"| Merge["<b>Hybrid Merge</b><br/>score = bm25_w×s1 + vec_w×s2<br/>(默認各 0.5)"]
+    Vector -->|"k×3 結果"| Merge
+
+    Merge --> Dedup["<b>同檔去重</b><br/>每檔最多 2 chunks"]
+    Dedup --> Rerank["<b>LLM Re-rank</b><br/>GLM-4.7 / MiniMax"]
+    Rerank --> Result["📋 返回 Top-K 結果"]
+
+    style Q fill:#e1f5fe
+    style Result fill:#c8e6c9
+    style Rerank fill:#fff3e0
 ```
 
 | 組件 | 實現 | 特點 |
@@ -105,6 +137,52 @@ Layer 2: GLM-4.7 / MiniMax-M2.1 LLM 智能過濾
 | **BM25** | DuckDB FTS | 精確關鍵字匹配、零延遲 |
 | **Vector** | FAISS + sentence-transformers | 語義理解、跨語言 |
 | **Hybrid** | 加權融合 | 兼顧精確性和語義 |
+
+#### 技術參數配置
+
+| 參數類別 | 配置 | 說明 |
+|----------|------|------|
+| **向量庫** | FAISS (`IndexFlatIP`) | 內積索引 + L2 normalize = cosine similarity |
+| **Embedding** | `qwen/qwen3-embedding-4b` (2560 dims) | OpenRouter API，fallback 到本地 384 dims |
+| **維度檢查** | ✅ Fail-fast | API 返回非預期維度時直接報錯 |
+| **Chunk (Code)** | 50 行 / 10 行重疊 | `.py`, `.js`, `.go`, `.rs` 等 50+ 種副檔名 |
+| **Chunk (Docs)** | 256 tokens / 32 tokens 重疊 | `.md`, `.txt`, `.rst`, `.html` 等 |
+| **TopK (hybrid)** | **k×3** (BM25 + Vector 各取 3 倍) | 合併後同檔去重再 re-rank |
+| **同檔去重** | ✅ 每檔最多保留 2 個 chunk | 平衡 recall 與去冗餘 |
+| **最大檔案** | 1 MB | 超過自動跳過 |
+
+<details>
+<summary>📊 查詢流程示意 (v1.3.3+)</summary>
+
+```
+BM25: k*3 = 30 結果
+Vector: k*3 = 30 結果
+       ↓ 合併去重 (by source)
+    ~50-60 候選
+       ↓ 同檔去重 (每檔最多 2 個 chunk)
+    ~35-50 候選
+       ↓ Re-rank (LLM subagent)
+    返回 top-10
+```
+</details>
+
+<details>
+<summary>📁 支援的檔案類型 (70+ 種)</summary>
+
+**Code** (line-based chunking):
+- Python: `.py`, `.pyw`, `.pyi`, `.pyx`
+- JavaScript/TypeScript: `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`
+- Go: `.go` | Rust: `.rs` | Java: `.java` | Kotlin: `.kt`, `.kts`
+- C/C++: `.c`, `.h`, `.cpp`, `.cc`, `.hpp`, `.hxx`
+- C#: `.cs` | Ruby: `.rb` | PHP: `.php` | Swift: `.swift`
+- Shell: `.sh`, `.bash`, `.zsh` | SQL: `.sql`
+- Config: `.yaml`, `.yml`, `.toml`, `.json`, `.ini`
+- Web: `.vue`, `.svelte`, `.css`, `.scss`
+- Infra: `.tf`, `.hcl`, `.dockerfile`, `.proto`
+
+**Docs** (token-based chunking):
+- `.md`, `.markdown`, `.txt`, `.rst`, `.html`, `.adoc`, `.org`, `.tex`
+</details>
 
 **Fallback 機制**：
 - Vector 依賴未安裝 → 自動降級為純 BM25
