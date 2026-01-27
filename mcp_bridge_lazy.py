@@ -1692,7 +1692,7 @@ async def amain():
     async with stdio_server() as (read, write):
         init_options = InitializationOptions(
             server_name="augment-lite",
-            server_version="1.3.3",
+            server_version="1.3.4",
             capabilities=server.get_capabilities(
                 notification_options=NotificationOptions(),
                 experimental_capabilities={},

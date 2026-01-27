@@ -214,6 +214,8 @@ python tests/test_auto_mode.py
 ## 測試覆蓋範圍
 
 ### tests/ 目錄（正式測試）
+
+#### ✅ 已測試功能
 - ✅ RAG search and answer generation
 - ✅ Project management (init, rebuild, status)
 - ✅ Memory API (get, set, delete, list, clear)
@@ -224,6 +226,24 @@ python tests/test_auto_mode.py
 - ✅ Deduplication, ranking, filtering
 - ✅ Index rebuild logic
 - ✅ Proxy routing (Gemini, Kimi, GLM, MiniMax)
+
+#### ❌ v1.3.x 新功能（缺少測試）
+> **注意**: 以下功能在 v1.3.x 新增，但測試腳本尚未覆蓋
+
+| 工具 | 描述 | 測試文件 |
+|------|------|----------|
+| `dual.search` | 雙引擎搜索 (auggie + augment-lite) | ❌ 需要 `test_v1.3_new_features.py` |
+| `answer.accumulated` | 多輪累積問答 | ❌ 需要 `test_v1.3_new_features.py` |
+| `answer.unified` | 統一編排 (返回執行計劃) | ❌ 需要 `test_v1.3_new_features.py` |
+| `code.symbols` | Tree-sitter 符號提取 (12 種語言) | ❌ 需要 `test_v1.3_new_features.py` |
+| `code.find_symbol` | 按名稱查找符號定義 | ❌ 需要 `test_v1.3_new_features.py` |
+| `code.references` | AST-based 引用查找 | ❌ 需要 `test_v1.3_new_features.py` |
+| `search.pattern` | Regex 精確搜索 | ❌ 需要 `test_v1.3_new_features.py` |
+| `file.read` | 文件讀取（支持行範圍） | ❌ 需要 `test_v1.3_new_features.py` |
+| `file.list` | 目錄列表 | ❌ 需要 `test_v1.3_new_features.py` |
+| `file.find` | Glob 模式查找 | ❌ 需要 `test_v1.3_new_features.py` |
+
+**整體覆蓋率**: 21/31 工具 (68%)
 
 ### 根目錄（快速測試）
 - ⚠️ Gemini MCP basic call (已被 tests/ 覆蓋)

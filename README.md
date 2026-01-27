@@ -2,7 +2,7 @@
 
 > **Zero-Maintenance AI Code Assistant** - Local-first, cost-effective, privacy-safe
 
-[![Version](https://img.shields.io/badge/version-1.3.3-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
+[![Version](https://img.shields.io/badge/version-1.3.4-blue.svg)](https://github.com/zoonderkins/augment-lite-mcp/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-1.1+-green.svg)](https://github.com/anthropics/mcp)

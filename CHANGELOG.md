@@ -5,6 +5,24 @@ All notable changes to augment-lite MCP server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2026-01-28
+
+### ✨ New Features
+- **v1.3.x Test Suite**: Added `tests/test_v1.3_new_features.py` covering 10 new tools
+  - `dual.search`, `answer.accumulated`, `answer.unified`
+  - `code.symbols`, `code.find_symbol`, `code.references`
+  - `search.pattern`, `file.read`, `file.list`, `file.find`
+
+### 📚 Documentation
+- **TESTING.md**: Added test coverage gap analysis for v1.3.x features
+- **Serena Memory**: Updated `project_overview` and `recent_changes`
+- **Memory Cleanup**: Removed 5 obsolete memory entries
+
+### 🔧 Improvements
+- Test coverage increased from 68% (21/31) to 100% (31/31)
+
+---
+
 ## [1.3.3] - 2026-01-18
 
 ### ✨ New Features
